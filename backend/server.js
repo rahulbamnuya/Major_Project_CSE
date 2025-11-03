@@ -21,7 +21,7 @@ app.use(cors({
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'https://complexrouteoptimizer.netlify.app',
-      'https://dashboard.render.com/static/srv-d40jmcs9c44c73bckji0',
+      'https://major-project-cse-23.onrender.com'
     ];
     if (allowed.includes(origin)) return callback(null, true);
     // for debug, allow all - comment out in production
