@@ -5,17 +5,18 @@ import axios from 'axios';
 // const API_URL = process.env.NODE_ENV === 'production' 
 //   ? 'https://complexrouteoptimization.onrender.com/api'
 //   : 'http://localhost:5000/api';
-// Create axios instance
 
 const API_URL = process.env.NODE_ENV === 'production' 
   ? 'https://major-project-cse-22.onrender.com/api'
   : 'http://localhost:5000/api';
+
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
   }
 });
+
 
 // Add token to requests
 api.interceptors.request.use(
