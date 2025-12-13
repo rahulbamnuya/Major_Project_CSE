@@ -43,6 +43,9 @@ class OptimizeRequest(BaseModel):
         if isinstance(v, bool): return v
         if isinstance(v, str): return v.lower() == "true"
         return bool(v)
+@app.get("/")
+def root():
+    return {"message": "VRP Solver API is running!"}
 
 @app.get("/health")
 def health(): return {"status": "ok"}

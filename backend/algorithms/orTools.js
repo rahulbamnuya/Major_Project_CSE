@@ -5,7 +5,7 @@ const { enhancedClarkeWrightAlgorithm } = require('./enhancedClarkeWright');
 
 exports.orToolsAlgorithm = async (vehicles, locations, depot, useTimeWindows = false) => {
   // const PYTHON_API_URL = 'http://127.0.0.1:8000/optimize';
-  const PYTHON_API_URL = 'https://backend-for-route-optimization-81mu.onrender.com/optimize';
+  const PYTHON_API_URL = 'https://major-project-cse-222.onrender.com/optimize';
 
   try {
     const requestData = {
