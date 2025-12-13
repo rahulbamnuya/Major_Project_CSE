@@ -16,12 +16,9 @@ exports.getLocationById = async (req, res) => {
   try {
     const location = await Location.findById(req.params.id);
     
-    // Check if location exists
     if (!location) {
       return res.status(404).json({ msg: 'Location not found' });
     }
-    
-    // Check user
     if (location.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'User not authorized' });
     }
@@ -38,7 +35,19 @@ exports.getLocationById = async (req, res) => {
 
 // Create location
 exports.createLocation = async (req, res) => {
-  const { name, address, latitude, longitude, demand, isDepot } = req.body;
+  // ================== DESTRUCTURE NEW FIELDS ==================
+  const { 
+    name, 
+    address, 
+    latitude, 
+    longitude, 
+    demand, 
+    isDepot,
+    serviceTime,
+    timeWindowStart,
+    timeWindowEnd
+  } = req.body;
+  // ==========================================================
   
   try {
     const newLocation = new Location({
@@ -48,6 +57,11 @@ exports.createLocation = async (req, res) => {
       longitude,
       demand: demand || 0,
       isDepot: isDepot || false,
+      // ================== SAVE NEW FIELDS ==================
+      serviceTime: serviceTime || 0,
+      timeWindowStart: timeWindowStart, // Will be null if not provided
+      timeWindowEnd: timeWindowEnd,     // Will be null if not provided
+      // =====================================================
       user: req.user.id
     });
     
@@ -61,31 +75,56 @@ exports.createLocation = async (req, res) => {
 
 // Update location
 exports.updateLocation = async (req, res) => {
-  const { name, address, latitude, longitude, demand, isDepot } = req.body;
+  // ================== DESTRUCTURE NEW FIELDS ==================
+  const { 
+    name, 
+    address, 
+    latitude, 
+    longitude, 
+    demand, 
+    isDepot,
+    serviceTime,
+    timeWindowStart,
+    timeWindowEnd
+  } = req.body;
+  // ==========================================================
   
   try {
     let location = await Location.findById(req.params.id);
     
-    // Check if location exists
     if (!location) {
       return res.status(404).json({ msg: 'Location not found' });
     }
-    
-    // Check user
     if (location.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'User not authorized' });
     }
     
-    // Update fields
-    location.name = name || location.name;
-    location.address = address || location.address;
-    location.latitude = latitude || location.latitude;
-    location.longitude = longitude || location.longitude;
+    // Build the update object
+    const updateFields = {
+        name,
+        address,
+        latitude,
+        longitude,
+        demand,
+        isDepot,
+        serviceTime,
+        timeWindowStart,
+        timeWindowEnd
+    };
     
-    if (demand !== undefined) location.demand = demand;
-    if (isDepot !== undefined) location.isDepot = isDepot;
-    
-    await location.save();
+    // Filter out undefined fields so we don't overwrite existing data with nothing
+    Object.keys(updateFields).forEach(key => {
+        if (updateFields[key] === undefined) {
+            delete updateFields[key];
+        }
+    });
+
+    location = await Location.findByIdAndUpdate(
+        req.params.id,
+        { $set: updateFields },
+        { new: true } // This option returns the updated document
+    );
+
     res.json(location);
   } catch (err) {
     console.error(err.message);
@@ -101,12 +140,9 @@ exports.deleteLocation = async (req, res) => {
   try {
     const location = await Location.findById(req.params.id);
     
-    // Check if location exists
     if (!location) {
       return res.status(404).json({ msg: 'Location not found' });
     }
-    
-    // Check user
     if (location.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'User not authorized' });
     }

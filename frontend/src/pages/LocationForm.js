@@ -6,6 +6,22 @@ import 'leaflet/dist/leaflet.css';
 import LocationSearch from '../components/LocationSearch';
 import { useToast } from '../components/ToastProvider';
 import '../styles/Forms.css';
+// ================== NEW HELPER FUNCTIONS ==================
+// Converts "HH:mm" time string to minutes from midnight
+const timeToMinutes = (timeStr) => {
+  if (!timeStr) return null;
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+// Converts minutes from midnight to "HH:mm" time string
+const minutesToTime = (minutes) => {
+  if (minutes === null || isNaN(minutes)) return '';
+  const h = Math.floor(minutes / 60).toString().padStart(2, '0');
+  const m = (minutes % 60).toString().padStart(2, '0');
+  return `${h}:${m}`;
+};
+// ==========================================================
 
 const LocationForm = () => {
   const { id } = useParams();
@@ -22,7 +38,10 @@ const LocationForm = () => {
     latitude: '',
     longitude: '',
     demand: '0',
-    isDepot: false
+    isDepot: false,
+        // ================== NEW STATE FOR TIME WINDOWS ==================
+    timeWindowStart: '', // Stored as "HH:mm" for the input field
+    timeWindowEnd: '',   // Stored as "HH:mm" for the input field
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -83,14 +102,17 @@ const LocationForm = () => {
     try {
       setLoading(true);
       const response = await LocationService.get(id);
-      const { name, address, latitude, longitude, demand, isDepot } = response;
+      const { name, address, latitude, longitude, demand, isDepot,timeWindowStart, timeWindowEnd  } = response;
       setFormData({
         name: name || '',
         address: address || '',
         latitude: latitude.toString(),
         longitude: longitude.toString(),
         demand: (demand || 0).toString(),
-        isDepot: isDepot || false
+        isDepot: isDepot || false,
+        // ================== CONVERT MINUTES TO TIME FOR FORM ==================
+        timeWindowStart: minutesToTime(timeWindowStart),
+        timeWindowEnd: minutesToTime(timeWindowEnd),
       });
       notify('Location data loaded successfully', 'success', { autoClose: 2000 });
     } catch (err) {
@@ -168,13 +190,15 @@ const LocationForm = () => {
     setError('');
 
     try {
-      const locationData = {
+        const locationData = {
         name: formData.name,
         address: formData.address,
         latitude: parseFloat(formData.latitude),
         longitude: parseFloat(formData.longitude),
         demand: parseInt(formData.demand),
-        isDepot: formData.isDepot
+        isDepot: formData.isDepot,
+        timeWindowStart: timeToMinutes(formData.timeWindowStart),
+        timeWindowEnd: timeToMinutes(formData.timeWindowEnd),
       };
 
       if (isEditMode) {
@@ -301,7 +325,32 @@ const LocationForm = () => {
           />
           <small className="form-help">Amount of goods to be delivered/picked up at this location</small>
         </div>
-        
+          {/* ================== NEW TIME WINDOW INPUTS ================== */}
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="timeWindowStart">Time Window Start</label>
+            <input
+              type="time"
+              id="timeWindowStart"
+              name="timeWindowStart"
+              value={formData.timeWindowStart}
+              onChange={onChange}
+            />
+            <small className="form-help">Earliest arrival time. Leave blank if none.</small>
+          </div>
+          <div className="form-group">
+            <label htmlFor="timeWindowEnd">Time Window End</label>
+            <input
+              type="time"
+              id="timeWindowEnd"
+              name="timeWindowEnd"
+              value={formData.timeWindowEnd}
+              onChange={onChange}
+            />
+            <small className="form-help">Latest arrival time. Leave blank if none.</small>
+          </div>
+        </div>
+        {/* ============================================================ */}
         <div className="form-group checkbox-group">
           <input
             type="checkbox"

@@ -30,6 +30,33 @@ import {
 const DEFAULT_FUEL_COST_PER_KM = 10;
 const DEFAULT_DRIVER_COST_PER_KM = 8;
 
+// New Custom Tooltip Component
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="custom-tooltip">
+        <p className="label">{`${label}`}</p>
+        <p className="intro">
+          <span style={{ color: '#4f46e5' }}>Total Cost:</span> {`₹${Number(data['Total Cost'] || 0).toFixed(2)}`}
+        </p>
+        <p className="intro">
+          <span style={{ color: '#10b981' }}>Fuel Cost:</span> {`₹${Number(data['Fuel Cost'] || 0).toFixed(2)}`}
+        </p>
+        <p className="intro">
+          <span style={{ color: '#f59e0b' }}>Driver Cost:</span> {`₹${Number(data['Driver Cost'] || 0).toFixed(2)}`}
+        </p>
+        <p className="intro">
+           <span style={{ color: '#ef4444' }}>Distance:</span> {`${Number(data['Distance'] || 0).toFixed(2)} km`}
+        </p>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+
 const AlgorithmComparison = () => {
   const { id } = useParams();
   const [optimization, setOptimization] = useState(null);
@@ -196,7 +223,7 @@ const AlgorithmComparison = () => {
             <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
               <XAxis dataKey="name" />
               <YAxis />
-              <Tooltip formatter={(value) => formatCurrency(value)} />
+              <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Bar dataKey="Total Cost" fill="#4f46e5" />
               <Bar dataKey="Fuel Cost" fill="#10b981" />

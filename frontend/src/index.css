@@ -149,3 +149,84 @@ body {
   .print-friendly .container { max-width: 100% !important; }
   .print-friendly .rounded-xl { box-shadow: none !important; border-color: #e5e7eb !important; }
 }
+/* Add these new styles to your existing OptimizationDetail.css file */
+
+.timeline-window {
+  font-size: 0.8rem;
+  color: #6c757d; /* A muted gray color */
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip.late-chip {
+  background-color: #dc3545; /* Red for high alert */
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: auto; /* Pushes it to the right */
+}
+
+.time-value.late-text {
+  color: #dc3545;
+  font-weight: bold;
+}
+/* Add these new styles to your existing OptimizationDetail.css file */
+
+.timeline-window {
+  font-size: 0.8rem;
+  color: #6c757d; /* A muted gray color */
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip.late-chip {
+  background-color: #dc3545; /* Red for high alert */
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: auto; /* Pushes it to the right */
+}
+
+.time-value.late-text {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+/* Ensure the timeline header can push the late chip to the right */
+.timeline-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.custom-tooltip {
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  font-size: 0.875rem;
+}
+
+.custom-tooltip .label {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1e293b;
+}
+
+.custom-tooltip .intro {
+  margin: 0.25rem 0;
+  color: #475569;
+}
+
+.custom-tooltip .intro span {
+  font-weight: 500;
+}

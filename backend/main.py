@@ -1,149 +1,117 @@
+# main.py
+
 import os
 import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import List, Optional
 from dotenv import load_dotenv
 import openrouteservice
-from openrouteservice.exceptions import ApiError
 from fastapi.encoders import jsonable_encoder
 
-# Import the refactored solver functions
-from vrp_solver import get_distance_matrix, solve_cvrp_without_restrictions, compute_route_geometries
-
-# --- NEW: Configure structured logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+from vrp_solver import (
+    get_distance_matrix,
+    solve_cvrp_without_restrictions,
+    solve_cvrp_with_time_windows,
+    compute_route_geometries
 )
 
-# --- CHANGED: Load environment variables securely ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 load_dotenv()
 ORS_API_KEY = os.getenv("ORS_API_KEY")
-
 app = FastAPI(title="VRP Solver API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# --- BEST PRACTICE: For production, specify your frontend's actual origin ---
-# Example: allow_origins=["http://localhost:3000", "https://your-app-domain.com"]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # OK for local development
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# --- Pydantic Models for Request Body (No changes needed) ---
 class Location(BaseModel):
-    name: str
-    latitude: float
-    longitude: float
-
+    name: str; latitude: float; longitude: float
+    serviceTime: Optional[int] = Field(0, description="User-override for service time in minutes. If 0, it will be calculated based on demand.")
+    timeWindowStart: Optional[int] = Field(None)
+    timeWindowEnd: Optional[int] = Field(None)
 class Vehicle(BaseModel):
-    id: str
-    capacity: int
-    fuel_cost_per_km: Optional[float] = None
-    driver_cost_per_km: Optional[float] = None
-    type: Optional[str] = None
-
+    id: str; capacity: int
 class OptimizeRequest(BaseModel):
-    locations: List[Location] = Field(..., min_items=2, description="List of locations. The first one MUST be the depot.")
-    vehicles: List[Vehicle] = Field(..., min_items=1)
+    locations: List[Location]
+    vehicles: List[Vehicle]
     demands: List[int]
+    useTimeWindows: Optional[bool] = False
     include_geometry: Optional[bool] = True
-    time_limit_seconds: Optional[int] = 15
+    time_limit_seconds: Optional[int] = 30
+    traffic_factor: Optional[float] = 1.25
+    @validator("useTimeWindows", pre=True)
+    def parse_use_time_windows(cls, v):
+        if isinstance(v, bool): return v
+        if isinstance(v, str): return v.lower() == "true"
+        return bool(v)
 
-# --- API Endpoints ---
 @app.get("/health")
-def health():
-    return {"status": "ok"}
+def health(): return {"status": "ok"}
 
 @app.post("/optimize")
 def optimize(req: OptimizeRequest):
-    # 1. --- Initial Validation ---
-    if not ORS_API_KEY:
-        logging.error("ORS_API_KEY not found in environment variables.")
-        raise HTTPException(status_code=500, detail="Server configuration error: ORS_API_KEY not set.")
-    
-    if len(req.demands) != len(req.locations):
-        raise HTTPException(status_code=400, detail="The number of demands must match the number of locations.")
-    
-    if req.demands[0] != 0:
-        raise HTTPException(status_code=400, detail="The demand for the first location (depot) must be 0.")
-
-    # --- NEW: Detailed logging of the received request ---
-    logging.info("--- VRP Optimization Request Received ---")
+    logging.info(f"--- VRP Request Received (Time Windows: {req.useTimeWindows}) ---")
     try:
-        vehicle_capacities = [v.capacity for v in req.vehicles]
-        logging.info(f"Locations: {len(req.locations)}")
-        logging.info(f"Vehicles: {len(req.vehicles)}")
-        logging.info(f"Demands: {req.demands}")
-        logging.info(f"Vehicle Capacities: {vehicle_capacities}")
-        logging.info(f"Total Demand: {sum(req.demands)}")
-        logging.info(f"Total Capacity: {sum(vehicle_capacities)}")
-    except Exception as e:
-        logging.error(f"Error during logging input data: {e}")
-    logging.info("---------------------------------------")
-
-    # 2. --- Pre-Solve Infeasibility Check ---
-    if req.vehicles:
-        max_vehicle_capacity = max(v.capacity for v in req.vehicles)
-        for i, demand in enumerate(req.demands):
-            if demand > max_vehicle_capacity:
-                location_name = req.locations[i].name
-                error_detail = f"Problem is infeasible. Demand for location '{location_name}' ({demand}) exceeds the largest vehicle capacity ({max_vehicle_capacity})."
-                logging.warning(error_detail)
-                raise HTTPException(status_code=400, detail=error_detail)
-
-    # 3. --- External API Calls and Solving ---
-    try:
-        client = openrouteservice.Client(key=ORS_API_KEY)
-
         locations_coords = [(loc.latitude, loc.longitude) for loc in req.locations]
-        location_names = [loc.name for loc in req.locations]
         vehicles_dict = jsonable_encoder(req.vehicles)
+        distance_matrix = get_distance_matrix(locations_coords)
 
-        logging.info("Fetching distance matrix from OpenRouteService...")
-        distance_matrix = get_distance_matrix( locations_coords)
-        if distance_matrix is None:
-            raise HTTPException(status_code=503, detail="Failed to build distance matrix from ORS. The service may be unavailable.")
-        
-        logging.info("Distance matrix successfully built. Solving VRP...")
-        optimized = solve_cvrp_without_restrictions(
-            distance_matrix,
-            vehicles_dict,
-            req.demands,
-            location_names,
-            time_limit_seconds=req.time_limit_seconds
-        )
+        # ==================== DYNAMIC SERVICE TIME CALCULATION ====================
+        BASE_SERVICE_TIME_MINUTES = 3  # Fixed time for parking, paperwork, etc.
+        UNITS_PER_MINUTE_OF_UNLOADING = 10  # e.g., 100 units = 10 minutes
+
+        service_times_seconds = []
+        logging.info("Calculating service times based on demand...")
+        for i, loc in enumerate(req.locations):
+            # If the user provided a specific service time, use it.
+            if loc.serviceTime and loc.serviceTime > 0:
+                total_minutes = loc.serviceTime
+                logging.info(f"  - Location '{loc.name}': Using user-provided service time of {total_minutes} min.")
+            else:
+                # Depot (index 0) has zero service time.
+                if i == 0:
+                    total_minutes = 0
+                else:
+                    # Calculate service time dynamically based on demand.
+                    demand = req.demands[i]
+                    demand_based_minutes = demand / UNITS_PER_MINUTE_OF_UNLOADING
+                    total_minutes = BASE_SERVICE_TIME_MINUTES + demand_based_minutes
+                    logging.info(f"  - Location '{loc.name}' (Demand: {demand}): Calculated service time is {total_minutes:.2f} min.")
+            
+            service_times_seconds.append(int(total_minutes * 60))
+        # ========================================================================
+
+        REALISTIC_AVG_SPEED_KMH = 25
+
+        if req.useTimeWindows:
+            logging.info("Solving VRP with Time Window constraints.")
+            depot_tw = (req.locations[0].timeWindowStart or 360, req.locations[0].timeWindowEnd or 1080)
+            time_windows_seconds = [((loc.timeWindowStart or depot_tw[0]) * 60, (loc.timeWindowEnd or depot_tw[1]) * 60) for loc in req.locations]
+            
+            optimized = solve_cvrp_with_time_windows(
+                distance_matrix=distance_matrix, vehicles=vehicles_dict, demands=req.demands,
+                time_windows_seconds=time_windows_seconds, service_times_seconds=service_times_seconds,
+                avg_speed_kmh=REALISTIC_AVG_SPEED_KMH, time_limit_seconds=req.time_limit_seconds, traffic_factor=req.traffic_factor
+            )
+        else:
+            logging.info("Solving basic VRP without Time Window constraints.")
+            optimized = solve_cvrp_without_restrictions(
+                distance_matrix=distance_matrix, vehicles=vehicles_dict, demands=req.demands,
+                service_times_seconds=service_times_seconds,
+                avg_speed_kmh=REALISTIC_AVG_SPEED_KMH, time_limit_seconds=req.time_limit_seconds, traffic_factor=req.traffic_factor
+            )
+
         if not optimized:
-            # CHANGED: More descriptive error message
-            error_detail = "No solution found. The problem may be overly constrained (e.g., demands cannot be partitioned into vehicle capacities) or the solver timed out."
-            logging.warning(error_detail)
-            raise HTTPException(status_code=500, detail=error_detail)
-        
-        logging.info(f"Solution found for {len(optimized)} vehicle(s).")
+            raise HTTPException(status_code=422, detail="Solver could not find a feasible solution.")
 
-        if req.include_geometry:
-            logging.info("Computing route geometries...")
+        if req.include_geometry and ORS_API_KEY:
+            client = openrouteservice.Client(key=ORS_API_KEY)
             optimized = compute_route_geometries(client, locations_coords, optimized)
 
-    # --- NEW: Specific error handling for the ORS API ---
-    except ApiError as e:
-        logging.error(f"OpenRouteService API Error: {e}")
-        raise HTTPException(status_code=503, detail=f"Error communicating with OpenRouteService API. Please check the API key and service status. Details: {e}")
     except Exception as e:
-        logging.error(f"An unexpected error occurred during optimization: {e}")
-        raise HTTPException(status_code=500, detail=f"An unexpected server error occurred: {e}")
+        logging.error(f"An unexpected error during optimization: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # 4. --- Return the successful result ---
-    logging.info("Optimization complete. Returning result.")
     return jsonable_encoder({
         "result": optimized,
-        "summary": {
-            "vehicles_used": len(optimized),
-            "total_distance_km": round(sum(v.get("Distance (km)", 0) for v in optimized), 2),
-            "total_load": sum(v.get("Load Carried", 0) for v in optimized)
-        }
+        "summary": { "vehicles_used": len(optimized), "total_distance_km": round(sum(v.get("Distance (km)", 0) for v in optimized), 2)}
     })

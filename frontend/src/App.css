@@ -684,3 +684,165 @@ table tbody tr:hover {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+/* /styles/OptimizationDetail.css */
+
+/* ... (add this at the end of your existing file) ... */
+
+.route-timeline {
+  margin-top: 24px;
+}
+
+.route-timeline h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #334155; /* slate-700 */
+}
+
+.timeline-list {
+  list-style: none;
+  padding: 0;
+  position: relative;
+  border-left: 2px solid #e2e8f0; /* slate-200 */
+  margin-left: 10px;
+}
+
+.timeline-item {
+  position: relative;
+  padding: 8px 0 24px 24px;
+}
+
+.timeline-marker {
+  position: absolute;
+  left: -8px; /* Center the marker on the line */
+  top: 12px;
+  height: 14px;
+  width: 14px;
+  background-color: #fff;
+  border: 2px solid #3b82f6; /* blue-500 */
+  border-radius: 50%;
+}
+
+.timeline-item.depot .timeline-marker {
+  border-color: #f97316; /* orange-500 */
+}
+
+.timeline-content .timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.timeline-content .location-name {
+  font-weight: 600;
+  color: #1e293b; /* slate-800 */
+}
+
+.timeline-times {
+  font-size: 0.9rem;
+  color: #64748b; /* slate-500 */
+}
+
+.timeline-times .time-label {
+  font-weight: 500;
+  color: #475569; /* slate-600 */
+}
+
+.timeline-times .time-value {
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.timeline-times .time-separator {
+  margin: 0 8px;
+  color: #cbd5e1; /* slate-300 */
+}
+
+.chip.demand-chip {
+  background-color: #ecfdf5; /* green-50 */
+  color: #059669; /* green-600 */
+  font-size: 0.75rem;
+  padding: 2px 8px;
+}
+/* Add these new styles to your existing OptimizationDetail.css file */
+
+.timeline-window {
+  font-size: 0.8rem;
+  color: #6c757d; /* A muted gray color */
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip.late-chip {
+  background-color: #dc3545; /* Red for high alert */
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: auto; /* Pushes it to the right */
+}
+
+.time-value.late-text {
+  color: #dc3545;
+  font-weight: bold;
+}
+/* Add these new styles to your existing OptimizationDetail.css file */
+
+.timeline-window {
+  font-size: 0.8rem;
+  color: #6c757d; /* A muted gray color */
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip.late-chip {
+  background-color: #dc3545; /* Red for high alert */
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: auto; /* Pushes it to the right */
+}
+
+.time-value.late-text {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+/* Ensure the timeline header can push the late chip to the right */
+.timeline-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.custom-tooltip {
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  font-size: 0.875rem;
+}
+
+.custom-tooltip .label {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1e293b;
+}
+
+.custom-tooltip .intro {
+  margin: 0.25rem 0;
+  color: #475569;
+}
+
+.custom-tooltip .intro span {
+  font-weight: 500;
+}

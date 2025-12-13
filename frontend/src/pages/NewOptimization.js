@@ -26,6 +26,7 @@ const NewOptimization = () => {
   const [comparisonProgress, setComparisonProgress] = useState(0);
   const [currentAlgorithm, setCurrentAlgorithm] = useState('');
   const [selectAllLocations, setSelectAllLocations] = useState(false);
+  const [useTimeWindows, setUseTimeWindows] = useState(true); // Default to true
 
   useEffect(() => {
     if (currentUser?.preferences?.defaultAlgorithm) {
@@ -65,7 +66,12 @@ const NewOptimization = () => {
       setSelectedVehicles([...selectedVehicles, vehicleId]);
     }
   };
-
+const minutesToTime = (minutes) => {
+  if (minutes === null || typeof minutes === 'undefined' || isNaN(minutes)) return 'Anytime';
+  const h = Math.floor(minutes / 60).toString().padStart(2, '0');
+  const m = (minutes % 60).toString().padStart(2, '0');
+  return `${h}:${m}`;
+};
   const handleLocationSelect = (locationId) => {
     if (selectedLocations.includes(locationId)) {
       setSelectedLocations(selectedLocations.filter(id => id !== locationId));
@@ -206,6 +212,7 @@ const handleOptimize = async () => {
       locationIds: selectedLocations,
       algorithm,
       runComparison,
+       useTimeWindows: useTimeWindows,
     };
 
     console.log('Sending optimization data:', optimizationData);
@@ -466,6 +473,7 @@ const handleOptimize = async () => {
                         <th>Latitude</th>
                         <th>Longitude</th>
                         <th>Demand</th>
+                        <th>Time Window</th>
                         <th>Depot</th>
                       </tr>
                     </thead>
@@ -487,7 +495,16 @@ const handleOptimize = async () => {
                           <td>{Number(location?.latitude ?? 0).toFixed(6)}</td>
                           <td>{Number(location?.longitude ?? 0).toFixed(6)}</td>
                           <td>{location.demand || 0}</td>
+                          <td className="px-6 py-4">
+                        <span className="text-sm font-medium text-slate-900 dark:text-white">
+                          {typeof location.timeWindowStart === 'number' && typeof location.timeWindowEnd === 'number'
+                            ? `${minutesToTime(location.timeWindowStart)} - ${minutesToTime(location.timeWindowEnd)}`
+                            : 'Anytime'
+                          }
+                        </span>
+                      </td>
                           <td>{location.isDepot ? 'Yes' : 'No'}</td>
+                          
                         </tr>
                       ))}
                     </tbody>
@@ -530,7 +547,24 @@ const handleOptimize = async () => {
                   }
                 </p>
               </div>
-
+ {/* ================== NEW TIME WINDOW CHECKBOX ================== */}
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={useTimeWindows}
+                    onChange={(e) => setUseTimeWindows(e.target.checked)}
+                  />
+                  Enforce Time Window Constraints
+                </label>
+                <p className="help-text">
+                  {useTimeWindows
+                    ? "The optimization will respect the service times and time windows for each location."
+                    : "The optimization will ignore time windows and find the shortest distance route only."
+                  }
+                </p>
+              </div>
+              {/* ============================================================= */}
               {!runComparison && (
                 <div className="form-group">
                   <label htmlFor="algorithm">Algorithm</label>

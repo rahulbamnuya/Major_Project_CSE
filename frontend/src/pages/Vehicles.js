@@ -14,6 +14,7 @@ import {
   FaInfoCircle
 } from 'react-icons/fa';
 
+
 const Vehicles = () => {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
