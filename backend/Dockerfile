@@ -1,19 +1,18 @@
-# Use official Python image
-FROM python:3.11-slim
+# Use Node.js LTS image
+FROM node:18-slim
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install
-COPY requirements.txt .
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm install --production
 
-# Copy backend code
+# Copy the rest of the backend code
 COPY . .
 
-# Expose port for Fly
-EXPOSE 8080
+# Expose the port (Railway uses PORT environment variable)
+EXPOSE 5000
 
-# Run FastAPI with Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Start the Node.js server
+CMD ["npm", "start"]

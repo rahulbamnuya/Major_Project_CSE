@@ -104,7 +104,16 @@ def optimize(req: OptimizeRequest):
             )
 
         if not optimized:
-            raise HTTPException(status_code=422, detail="Solver could not find a feasible solution.")
+             logging.error("Solver could not find a feasible solution with given inputs:")
+             logging.error(f"Locations: {[loc.name for loc in req.locations]}")
+             logging.error(f"Demands: {req.demands}")
+             logging.error(f"Vehicles: {vehicles_dict}")
+             logging.error(f"Time windows (seconds): {time_windows_seconds}")
+             logging.error(f"Service times (seconds): {service_times_seconds}")
+             raise HTTPException(
+             status_code=422,
+             detail="Solver could not find a feasible solution. Try adjusting time windows or vehicle capacities."
+             )
 
         if req.include_geometry and ORS_API_KEY:
             client = openrouteservice.Client(key=ORS_API_KEY)

@@ -227,7 +227,7 @@ Users → Locations → Vehicles → Optimizations → Routes
    cd backend
    Activate the virtual environment
    venv\Scripts\activate
-   uvicorn main:app --reload
+   uvicorn main:app --reload 
    ```
 
 5. **Open your browser**

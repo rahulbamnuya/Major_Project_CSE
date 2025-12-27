@@ -21,8 +21,8 @@ app.use(cors({
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'https://complexrouteoptimizer.netlify.app',
-      'https://dashboard.render.com/static/srv-d40jmcs9c44c73bckji0',
-    ];
+      process.env.FRONTEND_URL,
+    ].filter(Boolean);
     if (allowed.includes(origin)) return callback(null, true);
     // for debug, allow all - comment out in production
     // return callback(null, true);
@@ -43,7 +43,7 @@ try {
   app.use('/api/vehicles', vehicleRoutes);
   app.use('/api/locations', locationRoutes);
   app.use('/api/optimization', optimizationRoutes);
-  
+
   console.log('✅ Routes mounted: /api/auth, /api/vehicles, /api/locations, /api/optimization, /api/drivers');
 } catch (err) {
   console.error('Error importing routes:', err);

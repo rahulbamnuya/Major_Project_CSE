@@ -1,0 +1,114 @@
+{
+  "locations": [
+    {
+      "serviceTime": 0,
+      "timeWindowStart": 360,
+      "timeWindowEnd": 1080
+    },
+    {
+      "name": "SGSITS",
+      "latitude": 22.72656,
+      "longitude": 75.8731082,
+      "serviceTime": 0,
+      "timeWindowStart": 600,
+      "timeWindowEnd": 720
+    },
+    {
+      "name": "Police station tilak nagar",
+      "latitude": 22.7057159,
+      "longitude": 75.9046875,
+      "serviceTime": 0,
+      "timeWindowStart": 600,
+      "timeWindowEnd": 1020
+    }
+  ],
+  "vehicles": [
+    {
+      "id": "689f24267f879e91cf45d8f2",
+      "capacity": 750
+    },
+    {
+      "id": "68c446e265c8e9aa70ddc58c",
+      "capacity": 850
+    },
+    {
+      "id": "68c4471065c8e9aa70ddc590",
+      "capacity": 450
+    },
+    {
+      "id": "68ce551608909508ff92179e",
+      "capacity": 850
+    },
+    {
+      "id": "68f9376e1e07f5e17a22f619",
+      "capacity": 400
+    },
+    {
+      "id": "68f9376e1e07f5e17a22f61a",
+      "capacity": 400
+    },
+    {
+      "id": "68f93dc4b7006fa2bcf58352",
+      "capacity": 1000
+    },
+    {
+      "id": "68f93dc4b7006fa2bcf58353",
+      "capacity": 1000
+    },
+    {
+      "id": "68f93dc4b7006fa2bcf58354",
+      "capacity": 1000
+    },
+    {
+      "id": "690095a4ba9d3f2cb6effb22",
+      "capacity": 750
+    },
+    {
+      "id": "690095a4ba9d3f2cb6effb23",
+      "capacity": 750
+    },
+    {
+      "id": "690095a4ba9d3f2cb6effb24",
+      "capacity": 750
+    },
+    {
+      "id": "6901f0cf79ef7acd69fcdb3d",
+      "capacity": 850
+    },
+    {
+      "id": "6901f0cf79ef7acd69fcdb3e",
+      "capacity": 850
+    },
+    {
+      "id": "6901f0cf79ef7acd69fcdb3f",
+      "capacity": 850
+    },
+    {
+      "id": "6908c13d0750ec68fff95c1f",
+      "capacity": 750
+    },
+    {
+      "id": "6908ca1f0750ec68fffcbbdb",
+      "capacity": 750
+    },
+    {
+      "id": "6908ca1f0750ec68fffcbbdc",
+      "capacity": 750
+    },
+    {
+      "id": "6908ca1f0750ec68fffcbbdd",
+      "capacity": 750
+    }
+  ],
+  "demands": [
+    0,
+    200,
+    123
+  ],
+  "include_geometry": true,
+  "time_limit_seconds": 30,
+  "useTimeWindows": {
+    "useTimeWindows": true
+  },
+  "traffic_factor": 1.25
+}
