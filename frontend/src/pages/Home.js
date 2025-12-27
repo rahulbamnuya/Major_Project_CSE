@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  FaTruck, 
-  FaMapMarkedAlt, 
-  FaRoute, 
-  FaChartLine, 
-  FaRocket, 
-  FaUsers, 
+import {
+  FaTruck,
+  FaMapMarkedAlt,
+  FaRoute,
+  FaChartLine,
+  FaRocket,
+  FaUsers,
   FaGlobe,
   FaArrowRight,
   FaPlay,
@@ -241,9 +241,8 @@ const RouteOptimizationDemo = () => {
                     {randomLocations.map((location, index) => (
                       <div
                         key={index}
-                        className={`absolute w-5 h-5 ${location.color} rounded-full flex items-center justify-center text-white text-xs font-bold transition-all duration-1000 shadow-lg border-2 border-white/50 ${
-                          currentStep >= 1 ? 'animate-pulse scale-110' : ''
-                        }`}
+                        className={`absolute w-5 h-5 ${location.color} rounded-full flex items-center justify-center text-white text-xs font-bold transition-all duration-1000 shadow-lg border-2 border-white/50 ${currentStep >= 1 ? 'animate-pulse scale-110' : ''
+                          }`}
                         style={{ left: location.x, top: location.y }}
                       >
                         {location.name}
@@ -256,7 +255,7 @@ const RouteOptimizationDemo = () => {
                         <svg className="absolute inset-0 w-full h-full pointer-events-none">
                           <defs>
                             <marker id={`arrowhead-${selectedAlgorithm}`} markerWidth="10" markerHeight="7"
-                             refX="9" refY="3.5" orient="auto">
+                              refX="9" refY="3.5" orient="auto">
                               <polygon points="0 0, 10 3.5, 0 7" fill={algorithms[selectedAlgorithm].color} />
                             </marker>
                           </defs>
@@ -333,12 +332,11 @@ const RouteOptimizationDemo = () => {
                         <div className="text-sm font-semibold text-blue-300">
                           {demoSteps[currentStep].name}
                         </div>
-                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          currentStep === 0 ? 'bg-gray-600 text-gray-300' :
-                          currentStep === 1 ? 'bg-blue-600 text-blue-100' :
-                          currentStep === 2 ? 'bg-purple-600 text-purple-100' :
-                          'bg-green-600 text-green-100'
-                        }`}>
+                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${currentStep === 0 ? 'bg-gray-600 text-gray-300' :
+                            currentStep === 1 ? 'bg-blue-600 text-blue-100' :
+                              currentStep === 2 ? 'bg-purple-600 text-purple-100' :
+                                'bg-green-600 text-green-100'
+                          }`}>
                           Step {currentStep + 1}/4
                         </div>
                       </div>
@@ -346,9 +344,9 @@ const RouteOptimizationDemo = () => {
                         {demoSteps[currentStep].description}
                       </div>
                     </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
               {/* Enhanced Interactive Demo Controls */}
               <div className="mt-8 space-y-6">
@@ -361,11 +359,10 @@ const RouteOptimizationDemo = () => {
                         <button
                           key={key}
                           onClick={() => setSelectedAlgorithm(key)}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-                            selectedAlgorithm === key
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${selectedAlgorithm === key
                               ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
                               : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
-                          }`}
+                            }`}
                           style={{
                             border: selectedAlgorithm === key ? `2px solid ${algo.color}` : 'none'
                           }}
@@ -440,11 +437,10 @@ const RouteOptimizationDemo = () => {
                           <button
                             key={speed}
                             onClick={() => setAnimationSpeed(speed)}
-                            className={`px-3 py-1 rounded text-sm font-medium transition-all duration-300 ${
-                              animationSpeed === speed
+                            className={`px-3 py-1 rounded text-sm font-medium transition-all duration-300 ${animationSpeed === speed
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
-                            }`}
+                              }`}
                           >
                             {speed}x
                           </button>
@@ -499,8 +495,8 @@ const RouteOptimizationDemo = () => {
                   </div>
                 )}
               </div>
+            </div>
           </div>
-        </div>
 
           {/* Demo Information */}
           <div className="demo-info">
@@ -560,7 +556,7 @@ const RouteOptimizationDemo = () => {
           </div>
         </div>
       </div>
-              </div>
+    </div>
   );
 };
 
@@ -570,7 +566,7 @@ const Home = () => {
 
   useEffect(() => {
     setIsVisible(true);
-    
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -690,7 +686,7 @@ const Home = () => {
       description: "Bank-level encryption, SOC 2 compliance, and role-based access control for your data."
     },
     {
-                      icon: <FaBolt />,
+      icon: <FaBolt />,
       title: "High Performance",
       description: "Optimized algorithms that can process complex routing problems in under 100ms."
     },
@@ -704,18 +700,17 @@ const Home = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       {/* Hero Section */}
-      <section 
+      <section
         ref={heroRef}
-        className={`relative overflow-hidden pt-20 pb-32 transition-all duration-1000 ${
-          isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-        }`}
+        className={`relative overflow-hidden pt-20 pb-32 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+          }`}
       >
         {/* Background Elements */}
         <div className="absolute inset-0">
           <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-float"></div>
-          <div className="absolute top-40 right-10 w-72 h-72 bg-slate-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-float" style={{animationDelay: '-2s'}}></div>
-          <div className="absolute -bottom-8 left-20 w-72 h-72 bg-green-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-float" style={{animationDelay: '-4s'}}></div>
-            </div>
+          <div className="absolute top-40 right-10 w-72 h-72 bg-slate-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-float" style={{ animationDelay: '-2s' }}></div>
+          <div className="absolute -bottom-8 left-20 w-72 h-72 bg-green-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-float" style={{ animationDelay: '-4s' }}></div>
+        </div>
 
         <div className="relative container mx-auto px-6">
           <div className="text-center max-w-4xl mx-auto">
@@ -724,7 +719,7 @@ const Home = () => {
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                 🚀 Now with AI-Powered Complex Route Optimization
               </span>
-              </div>
+            </div>
 
             <h1 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white mb-6 leading-tight animate-fade-in-up">
               Optimize Your
@@ -733,35 +728,35 @@ const Home = () => {
               </span>
             </h1>
 
-            <p className="text-xl md:text-2xl text-slate-600 dark:text-slate-300 mb-8 max-w-3xl mx-auto leading-relaxed animate-fade-in-up" style={{animationDelay: '0.2s'}}>
+            <p className="text-xl md:text-2xl text-slate-600 dark:text-slate-300 mb-8 max-w-3xl mx-auto leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
               Transform your logistics with intelligent route optimization. Save time, reduce costs, and deliver more with our AI-powered platform.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in-up" style={{animationDelay: '0.4s'}}>
-              <Link 
-                to="/register" 
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+              <Link
+                to="/register"
                 className="group bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
               >
                 Start Free Trial
                 <FaArrowRight className="inline-block ml-2 group-hover:translate-x-1 transition-transform" />
               </Link>
-              
+
               <button className="group flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-300">
                 <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow border border-slate-200 dark:border-slate-600">
                   <FaPlay className="text-blue-600 ml-1" />
-            </div>
+                </div>
                 <span className="font-semibold">Watch Demo</span>
               </button>
-              </div>
+            </div>
 
             {/* Trust Indicators */}
-            <div className="mt-16 animate-fade-in-up" style={{animationDelay: '0.6s'}}>
+            <div className="mt-16 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Trusted by industry leaders</p>
               <div className="flex justify-center items-center gap-8 opacity-60">
-                {['Blue Dart', 'FedEx', 'DHL','Delhivery LTD', 'Dev Daily Logistics','EcomExpress',].map((tech, index) => (
+                {['Blue Dart', 'FedEx', 'DHL', 'Delhivery LTD', 'Dev Daily Logistics', 'EcomExpress',].map((tech, index) => (
                   <div key={tech} className="text-sm font-medium text-slate-600 dark:text-slate-400">
                     {tech}
-            </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -786,10 +781,10 @@ const Home = () => {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, index) => (
-              <div 
+              <div
                 key={feature.title}
                 className="group animate-on-scroll"
-                style={{animationDelay: `${index * 0.1}s`}}
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
                 <div className="relative p-8 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500 transition-all duration-300 hover:-translate-y-2 hover:shadow-xl">
                   <div className={`w-16 h-16 bg-gradient-to-r ${feature.color} rounded-xl flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform duration-300`}>
@@ -816,16 +811,16 @@ const Home = () => {
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
-              <div 
+              <div
                 key={stat.label}
                 className="text-center animate-on-scroll"
-                style={{animationDelay: `${index * 0.1}s`}}
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
                 <div className="text-4xl mb-2">{stat.icon}</div>
                 <div className="text-4xl md:text-5xl font-black text-slate-800 dark:text-white mb-2">
                   {stat.value}
                   {stat.suffix && <span className="text-2xl opacity-80">{stat.suffix}</span>}
-                  </div>
+                </div>
                 <div className="text-slate-600 dark:text-slate-300 font-medium">
                   {stat.label}
                 </div>
@@ -854,19 +849,19 @@ const Home = () => {
               { step: 3, title: 'Optimize Routes', description: 'Generate optimized routes with a single click' },
               { step: 4, title: 'Start Delivering', description: 'Follow the optimized routes and save time and fuel' }
             ].map((item, index) => (
-              <div key={item.step} className="relative animate-on-scroll" style={{animationDelay: `${index * 0.4}s`}}>
+              <div key={item.step} className="relative animate-on-scroll" style={{ animationDelay: `${index * 0.4}s` }}>
                 <div className="text-center">
                   <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-2xl mx-auto mb-6 relative z-20">
                     {item.step}
-          </div>
+                  </div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
                     {item.title}
                   </h3>
                   <p className="text-slate-600 dark:text-slate-300">
                     {item.description}
                   </p>
-        </div>
-                
+                </div>
+
                 {/* Connector Line - Properly positioned */}
                 {index < 3 && (
                   <div className="hidden md:block absolute top-8 left-1/2 w-full h-0.5 bg-gradient-to-r from-blue-600 to-blue-400 transform -translate-y-1/2 z-10"></div>
@@ -882,19 +877,19 @@ const Home = () => {
         <div className="container mx-auto px-6">
           <div className="text-center mb-16 animate-on-scroll">
             <h2 className="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white mb-6">
-              Built for Enterprise - 
+              Built for Enterprise -
             </h2>
             <p className="text-xl text-slate-600 dark:text-slate-300 max-w-3xl mx-auto">
-              Enterprise-grade technology that scales with your business 
+              Enterprise-grade technology that scales with your business
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {technicalFeatures.map((feature, index) => (
-              <div 
+              <div
                 key={feature.title}
                 className="text-center animate-on-scroll"
-                style={{animationDelay: `${index * 0.1}s`}}
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
                 <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center text-white mx-auto mb-6">
                   {feature.icon}
@@ -925,10 +920,10 @@ const Home = () => {
 
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {testimonials.map((testimonial, index) => (
-              <div 
+              <div
                 key={index}
                 className="bg-white dark:bg-slate-700 p-8 rounded-2xl border border-slate-200 dark:border-slate-600 animate-on-scroll shadow-sm"
-                style={{animationDelay: `${index * 0.2}s`}}
+                style={{ animationDelay: `${index * 0.2}s` }}
               >
                 <div className="flex gap-1 mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
@@ -971,10 +966,10 @@ const Home = () => {
 
           <div className="grid md:grid-cols-3 gap-8">
             {useCases.map((useCase, index) => (
-              <div 
+              <div
                 key={useCase.title}
                 className="group animate-on-scroll"
-                style={{animationDelay: `${index * 0.1}s`}}
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
                 <div className="bg-white dark:bg-slate-700 p-8 rounded-2xl border border-slate-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500 transition-all duration-300 hover:-translate-y-2 hover:shadow-xl">
                   <div className="text-4xl mb-4">{useCase.icon}</div>
@@ -1005,14 +1000,14 @@ const Home = () => {
               Join thousands of businesses saving time and money with our route optimization platform.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link 
-                to="/register" 
+              <Link
+                to="/register"
                 className="bg-white text-blue-600 px-8 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
               >
                 Start Free Trial
               </Link>
-              <Link 
-                to="/login" 
+              <Link
+                to="/login"
                 className="border-2 border-white text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-white hover:text-blue-600 transition-all duration-300"
               >
                 Log In
@@ -1037,10 +1032,10 @@ const Home = () => {
                 </div>
                 <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors cursor-pointer">
                   <FaUsers />
-            </div>
+                </div>
               </div>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-slate-400">
@@ -1049,7 +1044,7 @@ const Home = () => {
                 <li><Link to="/api" className="hover:text-white transition-colors">API</Link></li>
               </ul>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-slate-400">
@@ -1059,7 +1054,7 @@ const Home = () => {
               </ul>
             </div>
           </div>
-          
+
           <div className="border-t border-slate-800 mt-12 pt-8 text-center text-slate-400">
             <p>&copy; {new Date().getFullYear()} RouteOptimizer Team . All rights reserved.</p>
           </div>
@@ -1075,25 +1070,25 @@ const Home = () => {
               Full-stack developer passionate about creating innovative solutions for complex problems.
             </p>
             <div className="flex justify-center gap-6">
-              <a 
-                href="https://github.com/Devrajparmarr" 
-                target="_blank" 
+              <a
+                href="https://github.com/Devrajparmarr"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors duration-200"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
                 </svg>
                 GitHub
               </a>
-              <a 
-                href="https://www.linkedin.com/in/devraj-parmar-459363187/" 
-                target="_blank" 
+              <a
+                href="https://www.linkedin.com/in/devraj-parmar-459363187/"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors duration-200"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
                 </svg>
                 LinkedIn
               </a>

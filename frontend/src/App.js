@@ -49,13 +49,13 @@ function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
-                  
+
                   <Route path="/dashboard" element={
                     <PrivateRoute>
                       <Dashboard />
                     </PrivateRoute>
                   } />
-                  
+
                   <Route path="/vehicles" element={
                     <PrivateRoute>
                       <Vehicles />
@@ -71,7 +71,7 @@ function App() {
                       <VehicleForm />
                     </PrivateRoute>
                   } />
-                  
+
                   <Route path="/locations" element={
                     <PrivateRoute>
                       <Locations />
@@ -87,7 +87,7 @@ function App() {
                       <LocationForm />
                     </PrivateRoute>
                   } />
-                  
+
                   <Route path="/optimizations" element={
                     <PrivateRoute>
                       <Optimizations />
@@ -119,14 +119,14 @@ function App() {
                     </PrivateRoute>
                   } />
                   <Route path="/drivers" element={
-  <PrivateRoute><Drivers /></PrivateRoute>
-} />
-<Route path="/drivers/add" element={
-  <PrivateRoute><DriverForm /></PrivateRoute>
-} />
-<Route path="/drivers/edit/:id" element={
-  <PrivateRoute><DriverForm /></PrivateRoute>
-} />
+                    <PrivateRoute><Drivers /></PrivateRoute>
+                  } />
+                  <Route path="/drivers/add" element={
+                    <PrivateRoute><DriverForm /></PrivateRoute>
+                  } />
+                  <Route path="/drivers/edit/:id" element={
+                    <PrivateRoute><DriverForm /></PrivateRoute>
+                  } />
 
                 </Routes>
               </div>
