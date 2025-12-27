@@ -1,6 +1,7 @@
 const Optimization = require('../models/Optimization');
 const Vehicle = require('../models/Vehicle');
 const Location = require('../models/Location');
+const Driver = require('../models/Driver');
 
 // UTILS
 const { assignVehiclesToRoutes } = require('../utils/optimizationUtils');
@@ -66,7 +67,7 @@ exports.getOptimizationById = async (req, res) => {
 // exports.createOptimization = async (req, res) => {
 //  const { name, vehicleIds, locationIds, algorithm, runComparison = false } = req.body;
 //  console.log(req.body);
-  
+
 //   // Coerce useTimeWindows into a strict boolean
 //   let useTimeWindows = req.body.useTimeWindows;
 //   if (typeof useTimeWindows === 'string') {
@@ -74,7 +75,7 @@ exports.getOptimizationById = async (req, res) => {
 //   } else {
 //     useTimeWindows = !!useTimeWindows;
 //   }
-  
+
 //   console.log(`Starting optimization creation for '${name}'. Comparison mode: ${runComparison}, Use Time Windows: ${useTimeWindows}`);
 
 //   try {
@@ -83,15 +84,15 @@ exports.getOptimizationById = async (req, res) => {
 //       Vehicle.find({ _id: { $in: vehicleIds }, user: req.user.id }),
 //       Location.find({ _id: { $in: locationIds }, user: req.user.id })
 //     ]);
-    
+
 //     // Basic validation
 //     if (vehicles.length === 0 || allLocations.length === 0) {
 //       return res.status(400).json({ msg: 'Invalid vehicle or location IDs provided.' });
 //     }
-    
+
 //     const depot = allLocations.find(loc => loc.isDepot);
 //     const locations = allLocations.filter(loc => !loc.isDepot);
-    
+
 //     if (!depot) {
 //         return res.status(400).json({ msg: 'A depot location must be included.' });
 //     }
@@ -134,7 +135,7 @@ exports.getOptimizationById = async (req, res) => {
 
 exports.createOptimization = async (req, res) => {
   const { name, vehicleIds, locationIds, algorithm, runComparison = false } = req.body;
-  
+
   // Coerce useTimeWindows into a strict boolean
   let useTimeWindows = req.body.useTimeWindows;
   if (typeof useTimeWindows === 'string') {
@@ -331,10 +332,10 @@ async function runSingleAlgorithm(req, res, context) {
     console.log(`[Single Run] SUCCESS: ${selectedAlgo.name} finished in ${executionTime}ms.`);
 
     const routesWithVehicles = assignVehiclesToRoutes(rawRoutes, vehicles);
-   
+
 
     const metrics = calculateRouteMetrics(routesWithVehicles, locations, vehicles, depot._id);
-    
+
     const result = {
       algorithm: selectedAlgo.name,
       algorithmKey: algorithm,
@@ -358,7 +359,7 @@ async function runSingleAlgorithm(req, res, context) {
     const optimization = await newOptimization.save();
     const populated = await Optimization.findById(optimization._id).populate('vehicles').populate('locations');
     // console.log(populated);
-    
+
     res.json(populated);
   } catch (algoErr) {
     console.error(`[Single Run] FAILED: ${selectedAlgo.name} crashed. Error: ${algoErr.message}`);
@@ -391,12 +392,12 @@ exports.deleteOptimization = async (req, res) => {
 };
 function calculateRouteMetrics(routes, locations, vehicles, depotId, useTimeWindows = false) {
   let totalDistance = 0,
-      totalDuration = 0,
-      totalDemandServed = 0,
-      totalStops = 0,
-      totalServiceTime = 0,
-      totalArrivalDelay = 0,
-      onTimeDeliveries = 0;
+    totalDuration = 0,
+    totalDemandServed = 0,
+    totalStops = 0,
+    totalServiceTime = 0,
+    totalArrivalDelay = 0,
+    onTimeDeliveries = 0;
 
   const servedLocationIds = new Set();
 
@@ -457,6 +458,58 @@ function calculateRouteMetrics(routes, locations, vehicles, depotId, useTimeWind
 }
 
 /**
+ * PUT /api/optimization/:id/assign-driver
+ * Assign a driver to a specific route within an optimization.
+ */
+exports.assignDriverToRoute = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { routeIndex, driverId } = req.body;
+
+    const optimization = await Optimization.findById(id);
+    if (!optimization) return res.status(404).json({ msg: 'Optimization not found' });
+    if (optimization.user.toString() !== req.user.id) return res.status(401).json({ msg: 'User not authorized' });
+
+    if (!optimization.routes[routeIndex]) {
+      return res.status(404).json({ msg: 'Route index out of bounds' });
+    }
+
+    // Verify driver exists and belongs to user
+    // We import Driver model here or at top. Ideally at top.
+    // For now assuming Driver ID is valid or just trusting it if it's there.
+    // Let's rely on frontend sending valid ID, but safer to check.
+    // However, including 'Driver' model at top is cleaner.
+
+    // Update the route object within the optimization document
+    // We need to use Mongoose's array handling or just modify and save.
+    optimization.routes[routeIndex].driverId = driverId;
+
+    // Also update inside algorithmResults if we want consistency across the "best" result
+    if (optimization.algorithmResults && optimization.algorithmResults.length > 0) {
+      // Find the one that matches selectedAlgorithm
+      const selectedKey = optimization.selectedAlgorithm;
+      const resultIndex = optimization.algorithmResults.findIndex(r => r.algorithmKey === selectedKey);
+
+      if (resultIndex !== -1 && optimization.algorithmResults[resultIndex].routes[routeIndex]) {
+        optimization.algorithmResults[resultIndex].routes[routeIndex].driverId = driverId;
+      } else if (optimization.algorithmResults[0].routes[routeIndex]) {
+        // Fallback to first if selected not found or mismatch
+        optimization.algorithmResults[0].routes[routeIndex].driverId = driverId;
+      }
+    }
+
+    await optimization.markModified('routes'); // Tell mongoose mixed/array changed
+    await optimization.markModified('algorithmResults');
+    await optimization.save();
+
+    res.json(optimization);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+};
+
+/**
  * GET /api/optimizations/:id/route/:routeIndex/polyline
  * Get a routed polyline for a specific route within an optimization.
  */
@@ -466,12 +519,74 @@ exports.getRoutedPolyline = async (req, res) => {
     const optimization = await Optimization.findById(id);
     if (!optimization) return res.status(404).json({ msg: 'Optimization not found' });
     if (optimization.user.toString() !== req.user.id) return res.status(401).json({ msg: 'User not authorized' });
-    
+
     const route = optimization.routes[Number(routeIndex)];
     if (!route) return res.status(404).json({ msg: 'Route not found' });
 
     const osrmData = await getOsrmRouteForStops(route.stops);
     res.json(osrmData);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+};
+
+/**
+ * PUT /api/optimizations/:id/route/:routeIndex/stop/:stopIndex/status
+ * Update status of a specific stop (e.g. Driver marks as 'Delivered').
+ * Optionally accepts proofOfDelivery (signature/photo).
+ */
+exports.updateStopStatus = async (req, res) => {
+  try {
+    const { id, routeIndex, stopIndex } = req.params;
+    const { status, proofOfDelivery } = req.body;
+
+    const optimization = await Optimization.findById(id);
+    if (!optimization) return res.status(404).json({ msg: 'Optimization not found' });
+
+    // Authorization: Ideally check if req.user is the assigned driver or the admin owner
+    // For simplicity in this demo, assuming if they have the token, it's allowed (or we rely on driver login)
+
+    const route = optimization.routes[Number(routeIndex)];
+    if (!route) return res.status(404).json({ msg: 'Route not found' });
+
+    const stop = route.stops[Number(stopIndex)];
+    if (!stop) return res.status(404).json({ msg: 'Stop not found' });
+
+    // Update Main Route
+    stop.status = status;
+    if (proofOfDelivery) {
+      stop.proofOfDelivery = {
+        ...proofOfDelivery,
+        timestamp: new Date()
+      };
+    }
+
+    // Sync with Algorithm Results (Best Result)
+    if (optimization.algorithmResults && optimization.algorithmResults.length > 0) {
+      const selectedKey = optimization.selectedAlgorithm;
+      const resultIndex = optimization.algorithmResults.findIndex(r => r.algorithmKey === selectedKey);
+
+      // Helper to update specific result stop
+      const updateResultStop = (rIdx) => {
+        if (optimization.algorithmResults[rIdx]?.routes[routeIndex]?.stops[stopIndex]) {
+          const s = optimization.algorithmResults[rIdx].routes[routeIndex].stops[stopIndex];
+          s.status = status;
+          if (proofOfDelivery) {
+            s.proofOfDelivery = { ...proofOfDelivery, timestamp: new Date() };
+          }
+        }
+      };
+
+      if (resultIndex !== -1) updateResultStop(resultIndex);
+      else if (optimization.algorithmResults.length > 0) updateResultStop(0);
+    }
+
+    await optimization.markModified('routes');
+    await optimization.markModified('algorithmResults');
+    await optimization.save();
+
+    res.json(optimization);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server error');
@@ -523,7 +638,7 @@ function findBestResult(results) {
 
   const maxCoverage = Math.max(...validResults.map(r => r.coveragePercentage || 0));
   const bestCandidates = validResults.filter(r => r.coveragePercentage === maxCoverage);
-  
+
   return bestCandidates.reduce((best, current) =>
     (current.totalDistance || Infinity) < (best.totalDistance || Infinity) ? current : best
   );

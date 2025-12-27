@@ -30,12 +30,22 @@ const remove = async (id) => {
   return response.data;
 };
 
+const uploadCSV = async (formData) => {
+  const response = await api.post('/locations/upload-csv', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
+
 const LocationService = {
   getAll,
   get,
   create,
   update,
-  remove
+  remove,
+  uploadCSV
 };
 
 export default LocationService;

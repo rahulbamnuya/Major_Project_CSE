@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api'; // Use configured API service
 import { FaPlus, FaIdCard, FaPhone, FaMapMarkerAlt, FaAddressCard, FaEdit, FaTrash, FaSearch } from 'react-icons/fa';
 import { useToast } from '../components/ToastProvider';
 import TableSkeleton from '../components/LoadingSkeleton';
@@ -22,7 +22,7 @@ export default function Drivers() {
       setLoading(true);
       // Ensure your backend actually has this route! 
       // If not, you'll need to create it. Assuming it exists based on previous file content.
-      const res = await axios.get('/api/drivers');
+      const res = await api.get('/drivers');
       setDrivers(res.data);
     } catch (err) {
       console.error('Fetch drivers error', err);
@@ -35,7 +35,7 @@ export default function Drivers() {
   async function handleDelete(id) {
     if (!window.confirm('Are you sure you want to delete this driver profile?')) return;
     try {
-      await axios.delete(`/api/drivers/${id}`);
+      await api.delete(`/drivers/${id}`);
       setDrivers(prev => prev.filter(d => d._id !== id));
       notify('Driver profile deleted', 'success');
     } catch (err) {

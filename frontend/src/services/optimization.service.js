@@ -30,12 +30,18 @@ const getRoutedPolyline = async (id, routeIndex) => {
   return response.data;
 };
 
+const assignDriver = async (id, routeIndex, driverId) => {
+  const response = await api.put(`/optimization/${id}/assign-driver`, { routeIndex, driverId });
+  return response.data;
+};
+
 const OptimizationService = {
   getAll,
   get,
   create,
   remove,
   getRoutedPolyline,
+  assignDriver
 };
 
 export default OptimizationService;

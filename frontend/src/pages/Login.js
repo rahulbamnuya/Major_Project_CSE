@@ -1,13 +1,13 @@
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaEnvelope, FaLock, FaSignInAlt, FaGoogle, FaGithub, FaLeaf, FaArrowRight } from 'react-icons/fa';
+import { FaEnvelope, FaLock, FaSignInAlt, FaGoogle, FaGithub, FaLeaf, FaArrowRight, FaTruck } from 'react-icons/fa';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../components/ToastProvider';
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+    email: '1234qwer@gmail.com',
+    password: '123123'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -167,6 +167,10 @@ const Login = () => {
               <FaGithub className="text-slate-900 dark:text-white" /> GitHub
             </button>
           </div>
+
+          <Link to="/portal" className="flex items-center justify-center gap-2 w-full py-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition-colors">
+            <FaTruck /> Driver Login Portal
+          </Link>
 
           <p className="text-center text-slate-500 text-sm">
             Don't have an account yet? <Link to="/register" className="text-indigo-600 font-bold hover:underline">Create an account</Link>

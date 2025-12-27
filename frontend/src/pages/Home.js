@@ -17,6 +17,7 @@ import {
   FaNetworkWired,
   FaMobile
 } from 'react-icons/fa';
+import HeroImage from '../assets/hero.png';
 
 // Interactive Route Optimization Demo Component
 const RouteOptimizationDemo = () => {
@@ -333,9 +334,9 @@ const RouteOptimizationDemo = () => {
                           {demoSteps[currentStep].name}
                         </div>
                         <div className={`px-2 py-1 rounded-full text-xs font-medium ${currentStep === 0 ? 'bg-gray-600 text-gray-300' :
-                            currentStep === 1 ? 'bg-blue-600 text-blue-100' :
-                              currentStep === 2 ? 'bg-purple-600 text-purple-100' :
-                                'bg-green-600 text-green-100'
+                          currentStep === 1 ? 'bg-blue-600 text-blue-100' :
+                            currentStep === 2 ? 'bg-purple-600 text-purple-100' :
+                              'bg-green-600 text-green-100'
                           }`}>
                           Step {currentStep + 1}/4
                         </div>
@@ -360,8 +361,8 @@ const RouteOptimizationDemo = () => {
                           key={key}
                           onClick={() => setSelectedAlgorithm(key)}
                           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${selectedAlgorithm === key
-                              ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
-                              : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+                            ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
+                            : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
                             }`}
                           style={{
                             border: selectedAlgorithm === key ? `2px solid ${algo.color}` : 'none'
@@ -438,8 +439,8 @@ const RouteOptimizationDemo = () => {
                             key={speed}
                             onClick={() => setAnimationSpeed(speed)}
                             className={`px-3 py-1 rounded text-sm font-medium transition-all duration-300 ${animationSpeed === speed
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
                               }`}
                           >
                             {speed}x
@@ -702,64 +703,84 @@ const Home = () => {
       {/* Hero Section */}
       <section
         ref={heroRef}
-        className={`relative overflow-hidden pt-20 pb-32 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-          }`}
+        className={`relative pt-24 pb-20 lg:pt-32 lg:pb-32 overflow-hidden transition-opacity duration-1000 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
       >
-        {/* Background Elements */}
-        <div className="absolute inset-0">
-          <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-float"></div>
-          <div className="absolute top-40 right-10 w-72 h-72 bg-slate-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-float" style={{ animationDelay: '-2s' }}></div>
-          <div className="absolute -bottom-8 left-20 w-72 h-72 bg-green-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-float" style={{ animationDelay: '-4s' }}></div>
-        </div>
+        <div className="container mx-auto px-6 max-w-7xl relative z-10">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
 
-        <div className="relative container mx-auto px-6">
-          <div className="text-center max-w-4xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full px-6 py-3 mb-8 animate-fade-in-down border border-slate-200 dark:border-slate-600">
-              <FaRocket className="text-blue-600" />
-              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                🚀 Now with AI-Powered Complex Route Optimization
-              </span>
-            </div>
+            {/* Text Content */}
+            <div className={`space-y-8 ${isVisible ? 'animate-fade-in-up' : ''}`}>
+              <div className="inline-flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-full px-5 py-2">
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+                <span className="text-sm font-semibold text-blue-700 dark:text-blue-300 tracking-wide uppercase">
+                  v2.0 Now Live
+                </span>
+              </div>
 
-            <h1 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white mb-6 leading-tight animate-fade-in-up">
-              Optimize Your
-              <span className="block text-blue-600 dark:text-blue-400">
-                Delivery Routes
-              </span>
-            </h1>
+              <h1 className="text-5xl lg:text-7xl font-extrabold text-slate-900 dark:text-white leading-[1.1] tracking-tight">
+                Smart Logistics <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+                  Made Simple.
+                </span>
+              </h1>
 
-            <p className="text-xl md:text-2xl text-slate-600 dark:text-slate-300 mb-8 max-w-3xl mx-auto leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-              Transform your logistics with intelligent route optimization. Save time, reduce costs, and deliver more with our AI-powered platform.
-            </p>
+              <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed max-w-xl">
+                Experience the future of fleet management. Our AI-driven platform optimizes routes, reduces fuel costs by 30%, and ensures on-time deliveries every time.
+              </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-              <Link
-                to="/register"
-                className="group bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
-              >
-                Start Free Trial
-                <FaArrowRight className="inline-block ml-2 group-hover:translate-x-1 transition-transform" />
-              </Link>
+              <div className="flex flex-wrap gap-4 pt-4">
+                <Link
+                  to="/register"
+                  className="btn bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-blue-500/30 transition-all transform hover:-translate-y-1"
+                >
+                  Get Started Free
+                  <FaArrowRight className="inline-block ml-2" />
+                </Link>
+                <button className="px-8 py-4 rounded-xl font-bold text-lg text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center gap-2">
+                  <FaPlay className="text-blue-500 text-sm" /> Live Demo
+                </button>
+              </div>
 
-              <button className="group flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-300">
-                <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow border border-slate-200 dark:border-slate-600">
-                  <FaPlay className="text-blue-600 ml-1" />
+              {/* Trust Badges */}
+              <div className="pt-8 border-t border-slate-200 dark:border-slate-800">
+                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Trusted by Industry Leaders</p>
+                <div className="flex flex-wrap gap-6 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
+                  {/* Placeholder Text Logos for now - creating a "logo-like" look */}
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-200 tracking-tighter">Fed<span className="text-blue-600">Ex</span></span>
+                  <span className="text-xl font-bold text-slate-800 dark:text-slate-200 italic">DHL</span>
+                  <span className="text-xl font-bold text-slate-800 dark:text-slate-200">DELHIVERY</span>
+                  <span className="text-xl font-bold text-blue-800 dark:text-blue-400">BlueDart</span>
                 </div>
-                <span className="font-semibold">Watch Demo</span>
-              </button>
-            </div>
-
-            {/* Trust Indicators */}
-            <div className="mt-16 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Trusted by industry leaders</p>
-              <div className="flex justify-center items-center gap-8 opacity-60">
-                {['Blue Dart', 'FedEx', 'DHL', 'Delhivery LTD', 'Dev Daily Logistics', 'EcomExpress',].map((tech, index) => (
-                  <div key={tech} className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                    {tech}
-                  </div>
-                ))}
               </div>
             </div>
+
+            {/* Hero Image */}
+            <div className={`relative hidden lg:block ${isVisible ? 'animate-fade-in-left' : ''}`} style={{ animationDelay: '0.3s' }}>
+              <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-700 bg-slate-900 transform rotate-1 hover:rotate-0 transition-transform duration-700">
+                <img src={HeroImage} alt="Logistics Dashboard Interface" className="w-full h-auto object-cover" />
+
+                {/* Floating Stats Card Overlay */}
+                <div className="absolute -bottom-6 -left-6 bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 animate-float">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
+                      <FaChartLine />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase font-bold">Efficiency</p>
+                      <p className="text-lg font-bold text-slate-900 dark:text-white">+145%</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Background Blobs */}
+              <div className="absolute -top-20 -right-20 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl -z-10 animate-pulse"></div>
+              <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl -z-10 animate-pulse" style={{ animationDelay: '2s' }}></div>
+            </div>
+
           </div>
         </div>
       </section>
@@ -1061,37 +1082,98 @@ const Home = () => {
         </div>
       </footer>
       {/* Developer Credits */}
-      <section className="py-12 bg-slate-900 text-white">
+      {/* Developer Team Section */}
+      <section className="py-20 bg-slate-900 text-white border-t border-slate-800">
         <div className="container mx-auto px-6 text-center">
-          <div className="max-w-2xl mx-auto">
-            <h3 className="text-2xl font-bold mb-4">Developed with ❤️ by</h3>
-            <div className="text-3xl font-bold text-blue-400 mb-6">Devraj Parmar</div>
-            <p className="text-slate-300 mb-8">
-              Full-stack developer passionate about creating innovative solutions for complex problems.
-            </p>
-            <div className="flex justify-center gap-6">
-              <a
-                href="https://github.com/Devrajparmarr"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors duration-200"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                </svg>
-                GitHub
-              </a>
-              <a
-                href="https://www.linkedin.com/in/devraj-parmar-459363187/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors duration-200"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-                </svg>
-                LinkedIn
-              </a>
+          <div className="max-w-4xl mx-auto">
+            <h3 className="text-3xl font-bold mb-12">Meet the Development Team</h3>
+
+            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-8">
+              {/* Rahul Bamaniya */}
+              <div className="group">
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold shadow-lg group-hover:scale-110 transition-transform">
+                  RB
+                </div>
+                <h4 className="font-bold text-lg text-white mb-1">Rahul Bamaniya</h4>
+                <p className="text-sm text-blue-400 mb-3">Team Lead & Full Stack</p>
+                <div className="flex justify-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
+                  <a href="https://github.com/rahulbamnuya" target="_blank" rel="noreferrer" className="bg-slate-800 p-2 rounded-full hover:bg-slate-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
+                  </a>
+                  <a href="https://www.linkedin.com/in/rahul-bamaniya-1375772a6" target="_blank" rel="noreferrer" className="bg-blue-600 p-2 rounded-full hover:bg-blue-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>
+                  </a>
+                </div>
+              </div>
+
+              {/* Devraj Parmar */}
+              <div className="group">
+                <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold shadow-lg group-hover:scale-110 transition-transform">
+                  DP
+                </div>
+                <h4 className="font-bold text-lg text-white mb-1">Devraj Parmar</h4>
+                <p className="text-sm text-purple-400 mb-3">Full Stack Developer</p>
+                <div className="flex justify-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
+                  <a href="https://github.com/DevrajParmarr" target="_blank" rel="noreferrer" className="bg-slate-800 p-2 rounded-full hover:bg-slate-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
+                  </a>
+                  <a href="https://www.linkedin.com/in/devrajparmarr" target="_blank" rel="noreferrer" className="bg-blue-600 p-2 rounded-full hover:bg-blue-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>
+                  </a>
+                </div>
+              </div>
+
+              {/* Prakhar Gupta */}
+              <div className="group">
+                <div className="w-24 h-24 bg-gradient-to-br from-green-500 to-teal-600 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold shadow-lg group-hover:scale-110 transition-transform">
+                  PG
+                </div>
+                <h4 className="font-bold text-lg text-white mb-1">Prakhar Gupta</h4>
+                <p className="text-sm text-green-400 mb-3">Frontend Developer</p>
+                <div className="flex justify-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
+                  <a href="https://github.com/prakhargupta48" target="_blank" rel="noreferrer" className="bg-slate-800 p-2 rounded-full hover:bg-slate-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
+                  </a>
+                  <a href="https://www.linkedin.com/in/prakhar-gupta-ba6856253" target="_blank" rel="noreferrer" className="bg-blue-600 p-2 rounded-full hover:bg-blue-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>
+                  </a>
+                </div>
+              </div>
+
+              {/* Prakhar Dangolia */}
+              <div className="group">
+                <div className="w-24 h-24 bg-gradient-to-br from-orange-500 to-red-600 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold shadow-lg group-hover:scale-110 transition-transform">
+                  PD
+                </div>
+                <h4 className="font-bold text-lg text-white mb-1">Prakhar Dangolia</h4>
+                <p className="text-sm text-orange-400 mb-3">Backend Developer</p>
+                <div className="flex justify-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
+                  <a href="https://github.com/prakhardangolia" target="_blank" rel="noreferrer" className="bg-slate-800 p-2 rounded-full hover:bg-slate-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
+                  </a>
+                  <a href="https://www.linkedin.com/in/prakhar-dangolia-102283254" target="_blank" rel="noreferrer" className="bg-blue-600 p-2 rounded-full hover:bg-blue-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>
+                  </a>
+                </div>
+              </div>
+
+              {/* Vaibhav Singh */}
+              <div className="group">
+                <div className="w-24 h-24 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold shadow-lg group-hover:scale-110 transition-transform">
+                  VS
+                </div>
+                <h4 className="font-bold text-lg text-white mb-1">Vaibhav Singh</h4>
+                <p className="text-sm text-cyan-400 mb-3">Algorithm Specialist</p>
+                <div className="flex justify-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
+                  <a href="https://github.com/spacelion06" target="_blank" rel="noreferrer" className="bg-slate-800 p-2 rounded-full hover:bg-slate-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
+                  </a>
+                  <a href="https://www.linkedin.com/in/vaibhavsingh0611" target="_blank" rel="noreferrer" className="bg-blue-600 p-2 rounded-full hover:bg-blue-700 transition-colors">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>
+                  </a>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>

@@ -6,10 +6,11 @@ import '../styles/OptimizationDetail.css';
 import { CardSkeleton, MapSkeleton, StatsCardSkeleton } from '../components/LoadingSkeleton';
 import { useToast } from '../components/ToastProvider';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 import {
   FaCalendarAlt, FaDownload, FaChartBar, FaPrint, FaArrowLeft,
   FaRoute, FaCogs, FaRoad, FaTruck, FaClock, FaBox, FaMapMarkerAlt,
-  FaCheckCircle, FaExclamationTriangle
+  FaCheckCircle, FaExclamationTriangle, FaUserTie
 } from 'react-icons/fa';
 
 // ================== HELPER FUNCTIONS ==================
@@ -43,6 +44,7 @@ const RouteTimeline = ({ route }) => {
           const isDepotStart = index === 0;
           const isDepotEnd = index === route.stops.length - 1;
           const departureTime = stop.arrivalTime + stop.serviceTime;
+          const status = stop.status || 'Pending';
 
           let label = 'Arrival';
           if (isDepotStart) label = 'Departure';
@@ -53,16 +55,29 @@ const RouteTimeline = ({ route }) => {
 
           return (
             <div key={index} className="relative pl-6">
-              {/* Dot Marker */}
+              {/* Dot Marker with Live Status */}
               <div
-                className={`absolute -left-[9px] top-1.5 w-4 h-4 rounded-full border-2 border-white dark:border-slate-800 ${isDepotStart || isDepotEnd ? 'bg-slate-800 dark:bg-slate-200' : isLate ? 'bg-red-500' : 'bg-blue-500'
+                className={`absolute -left-[9px] top-1.5 w-4 h-4 rounded-full border-2 border-white dark:border-slate-800 ${status === 'Delivered' ? 'bg-green-500' :
+                  status === 'En Route' ? 'bg-yellow-400 animate-pulse' :
+                    isDepotStart || isDepotEnd ? 'bg-slate-800 dark:bg-slate-200' : isLate ? 'bg-red-500' : 'bg-blue-500'
                   }`}
               ></div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700">
+              <div className={`bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border transition-colors ${status === 'Delivered' ? 'border-green-200 dark:border-green-900/30' :
+                status === 'En Route' ? 'border-yellow-200 dark:border-yellow-900/30' :
+                  'border-slate-100 dark:border-slate-700'
+                }`}>
                 <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
-                  <div className="font-bold text-slate-800 dark:text-slate-100 text-base">
-                    {stop.locationName}
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-800 dark:text-slate-100 text-base">
+                      {stop.locationName}
+                    </span>
+                    {status !== 'Pending' && (
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${status === 'Delivered' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                        {status}
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     {stop.demand > 0 && (
@@ -119,6 +134,7 @@ const RouteTimeline = ({ route }) => {
 const OptimizationDetail = () => {
   const { id } = useParams();
   const [optimization, setOptimization] = useState(null);
+  const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('routes');
@@ -128,9 +144,36 @@ const OptimizationDetail = () => {
   const [routedPolylines, setRoutedPolylines] = useState({});
 
   useEffect(() => {
-    fetchOptimization();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    const init = async () => {
+      // Show loading only on first load
+      if (!optimization) setLoading(true);
+      try {
+        const [optData, drvData] = await Promise.all([
+          OptimizationService.get(id),
+          api.get('/drivers').then(r => r.data).catch(() => [])
+        ]);
+        setOptimization(optData);
+        setDrivers(drvData);
+      } catch (err) {
+        // Only set error if we don't have data yet
+        if (!optimization) setError('Failed to load optimization data');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+
+    // Live Polling every 15 seconds
+    const intervalId = setInterval(() => {
+      // Silent refresh
+      OptimizationService.get(id).then(optData => {
+        setOptimization(optData);
+      }).catch(err => console.error("Polling error:", err));
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [id]); // Removing 'optimization' dependency to avoid re-creating interval on every update
 
   useEffect(() => {
     if (useRoadNetwork && optimization?.routes) {
@@ -163,17 +206,16 @@ const OptimizationDetail = () => {
     }
   }, [currentUser]);
 
-  const fetchOptimization = async () => {
+  const handleDriverAssign = async (routeIndex, driverId) => {
     try {
-      setLoading(true);
-      const response = await OptimizationService.get(id);
-      setOptimization(response);
-      setError('');
+      const updatedOpt = await OptimizationService.assignDriver(id, routeIndex, driverId);
+      setOptimization(prev => ({
+        ...prev,
+        routes: updatedOpt.routes // assume server returns updated optimization
+      }));
+      notify('Driver assigned successfully', 'success');
     } catch (err) {
-      setError('Failed to load optimization details');
-      console.error(err);
-    } finally {
-      setLoading(false);
+      notify('Failed to assign driver', 'error');
     }
   };
 
@@ -231,6 +273,9 @@ const OptimizationDetail = () => {
               </span>
               <span className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
                 <FaCheckCircle className="text-green-500" /> Completed
+              </span>
+              <span className="flex items-center gap-1.5 bg-red-100 dark:bg-red-900/30 px-3 py-1 rounded-full border border-red-200 dark:border-red-900/50 shadow-sm animate-pulse text-red-600 dark:text-red-400 font-bold tracking-wider text-xs uppercase">
+                <span className="w-2 h-2 bg-red-500 rounded-full inline-block"></span> Live Updates
               </span>
             </div>
           </div>
@@ -388,14 +433,37 @@ const OptimizationDetail = () => {
                   const hasTimeData = route.stops && route.stops.length > 0 && typeof route.stops[0].arrivalTime !== 'undefined';
                   const colorClass = ['border-blue-500', 'border-green-500', 'border-purple-500', 'border-orange-500'][index % 4];
 
+                  const routeVehicle = optimization.vehicles?.find(v => v._id === route.vehicle);
+                  const displayVehicleName = route.vehicleName || routeVehicle?.name || 'Unknown Vehicle';
+
                   return (
                     <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                       <div className={`p-4 border-l-4 ${colorClass} bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center`}>
-                        <h3 className="font-bold text-slate-800 dark:text-white">Route {index + 1} - {route.vehicleName}</h3>
+                        <h3 className="font-bold text-slate-800 dark:text-white">Route {index + 1} - {displayVehicleName}</h3>
                         <span className="text-xs font-mono bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300">
                           {Number(route.distance).toFixed(1)} km
                         </span>
                       </div>
+
+                      {/* Driver Assignment Section */}
+                      <div className="px-4 py-3 bg-indigo-50/50 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm text-indigo-800 dark:text-indigo-300 font-bold">
+                          <FaUserTie /> Assigned Driver:
+                        </div>
+                        <select
+                          className="bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-slate-700 dark:text-slate-200 text-sm rounded-lg py-1.5 px-3 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[150px]"
+                          value={route.driverId || ""}
+                          onChange={(e) => handleDriverAssign(index, e.target.value)}
+                        >
+                          <option value="">Select Driver...</option>
+                          {drivers.map(drv => (
+                            <option key={drv._id} value={drv._id}>
+                              {drv.name} ({drv.status || 'Unknown'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
                       <div className="p-6">
                         <div className="flex flex-wrap gap-2 mb-4">
                           <span className="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 flex items-center gap-1"><FaRoad /> {Number(route.distance).toFixed(2)} km</span>

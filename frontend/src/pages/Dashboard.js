@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   FaTruck, FaMapMarkerAlt, FaRoute, FaPlus,
   FaCalendarAlt, FaClock, FaRoad, FaCheckCircle, FaExclamationTriangle,
-  FaChartPie, FaBell
+  FaChartPie, FaBell, FaFileUpload
 } from 'react-icons/fa';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -134,6 +134,41 @@ const Dashboard = () => {
       }).filter(Boolean);
     }
     return [];
+  };
+
+  const fileInputRef = React.useRef(null);
+
+  const handleImportClick = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      setLoading(true);
+      // We need an API service method for this, but calling direct axis/fetch is faster for this edit
+      // Assuming api.js instance is available or I use fetch. Let's try to use the LocationService if possible, or direct axios.
+      // Wait, 'LocationService' imports 'api'.
+      // I'll assume LocationService has a method or I add it. 
+      // Let's check api.js import. It is NOT imported in Dashboard.js implicitly but 'services/location.service' is.
+      // I will add 'importCsv' to LocationService later. For now, I'll rely on a direct call or extending the service.
+      // Actually, let's just use the 'api' from '../services/api' if I import it, or extending LocationService is cleaner.
+      // I'll stick to extending LocationService.
+      await LocationService.uploadCSV(formData);
+      notify('Locations imported successfully!', 'success');
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      console.error(err);
+      notify(err.response?.data?.msg || 'Failed to upload CSV', 'error');
+    } finally {
+      setLoading(false);
+      event.target.value = null; // reset
+    }
   };
 
 
@@ -397,7 +432,20 @@ const Dashboard = () => {
               <div className="grid grid-cols-2 gap-3">
                 <QuickActionLink to="/vehicles/add" icon={<FaTruck />} label="Add Vehicle" />
                 <QuickActionLink to="/locations/add" icon={<FaMapMarkerAlt />} label="Add Location" />
+                <button
+                  onClick={handleImportClick}
+                  className="col-span-2 bg-white/10 hover:bg-white/20 p-4 rounded-xl flex items-center justify-center gap-3 backdrop-blur-sm transition-colors border border-white/5 text-sm font-semibold"
+                >
+                  <FaFileUpload className="text-xl text-green-300" /> Bulk Import Locations (CSV)
+                </button>
               </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept=".csv"
+              />
             </div>
 
             {/* System Status */}

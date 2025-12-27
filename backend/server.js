@@ -22,7 +22,7 @@ app.use(cors({
       'http://127.0.0.1:3000',
       'https://majorprojectcse-production.up.railway.app', // New production URL
       'https://complexrouteoptimizer.netlify.app',
-      'https://routeoptimizationmajor.vercel.app',
+      'https://logistics-master.vercel.app',
       process.env.FRONTEND_URL,
     ].filter(Boolean);
     if (allowed.includes(origin)) return callback(null, true);
@@ -39,12 +39,14 @@ try {
   const vehicleRoutes = require('./routes/vehicles');
   const locationRoutes = require('./routes/locations');
   const optimizationRoutes = require('./routes/optimization');
+  const driverRoutes = require('./routes/drivers');
   // ensure this file exists
   // Mount routes
   app.use('/api/auth', authRoutes);
   app.use('/api/vehicles', vehicleRoutes);
   app.use('/api/locations', locationRoutes);
   app.use('/api/optimization', optimizationRoutes);
+  app.use('/api/drivers', driverRoutes);
 
   console.log('✅ Routes mounted: /api/auth, /api/vehicles, /api/locations, /api/optimization, /api/drivers');
 } catch (err) {

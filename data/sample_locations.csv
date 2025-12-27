@@ -1,0 +1,6 @@
+Name,Address,Latitude,Longitude,Demand,ServiceTime
+Store A,123 Main St,22.7196,75.8577,10,15
+Store B,456 Oak Rd,22.7533,75.8937,5,10
+Warehouse X,789 Industrial Blvd,22.7244,75.8839,20,30
+Client Y,321 Pine Ln,22.7450,75.8700,8,12
+Depot Central,100 Central Ave,22.7670,75.8895,0,0

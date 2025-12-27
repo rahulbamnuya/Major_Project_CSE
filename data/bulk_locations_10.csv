@@ -1,0 +1,11 @@
+Name,Address,Latitude,Longitude,Demand,ServiceTime
+Grocery Mart_1,Sector A,22.7200,75.8600,12,15
+Grocery Mart_2,Sector B,22.7300,75.8700,8,10
+Grocery Mart_3,Sector C,22.7400,75.8800,15,20
+Super Store_1,Zone 1,22.7500,75.8900,25,30
+Super Store_2,Zone 2,22.7600,75.9000,18,25
+Local Shop_1,Area 51,22.7150,75.8550,5,5
+Local Shop_2,Area 52,22.7250,75.8650,7,8
+Local Shop_3,Area 53,22.7350,75.8750,9,10
+Distribution Hub,Indore Main,22.7670,75.8895,0,0
+Pharma Client,Hospital Road,22.7100,75.8500,4,10

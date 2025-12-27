@@ -1,220 +1,227 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
-import {
-  FaArrowLeft,
-  FaTrophy,
-  FaRoute,
-  FaCalculator,
-  FaTruck,
-  FaGasPump,
-  FaUserCog,
-  FaDollarSign,
-  FaChartLine,
-  FaBalanceScale,
-} from "react-icons/fa";
-import OptimizationService from "../services/optimization.service";
-import { useToast } from "../components/ToastProvider";
-import "../styles/AlgorithmComparison.css";
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import api from '../services/api'; // Use configured API service
+import { FaUser, FaIdCard, FaMobileAlt, FaMapMarkerAlt, FaSave, FaArrowLeft, FaEnvelope, FaAddressCard } from 'react-icons/fa';
+import { useToast } from '../components/ToastProvider';
 
-// Import Recharts
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-} from "recharts";
-
-const DEFAULT_FUEL_COST_PER_KM = 10;
-const DEFAULT_DRIVER_COST_PER_KM = 8;
-
-const AlgorithmComparison = () => {
+const DriverForm = () => {
   const { id } = useParams();
-  const [optimization, setOptimization] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedAlgorithmIndex, setSelectedAlgorithmIndex] = useState(null);
+  const navigate = useNavigate();
   const { notify } = useToast();
+  const isEditMode = !!id;
+
+  const [formData, setFormData] = useState({
+    name: '',
+    driverId: '',
+    phone: '',
+    email: '',
+    licenseNumber: '',
+    address: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(isEditMode);
 
   useEffect(() => {
-    const fetchOptimization = async () => {
-      try {
-        setLoading(true);
-        const data = await OptimizationService.get(id);
-        setOptimization(data);
-      } catch (err) {
-        console.error("Fetch optimization error:", err);
-        const errorMsg = "Failed to load optimization data";
-        setError(errorMsg);
-        notify(errorMsg, "error");
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (id) fetchOptimization();
-  }, [id, notify]);
-
-  // --- Compute all cost-related metrics ---
-  const processedResults = useMemo(() => {
-    if (!optimization?.algorithmResults || !optimization?.vehicles) return [];
-
-    const vehicleCostMap = new Map();
-    optimization.vehicles.forEach((v) => {
-      vehicleCostMap.set(v._id.toString(), {
-        fuelCost: v.fuel_cost_per_km || DEFAULT_FUEL_COST_PER_KM,
-        driverCost: v.driver_cost_per_km || DEFAULT_DRIVER_COST_PER_KM,
-      });
-    });
-
-    return optimization.algorithmResults.map((result) => {
-      if (result.error) return result;
-
-      let totalFuelCost = 0;
-      let totalDriverCost = 0;
-      let totalDistance = 0;
-      let totalStops = 0;
-      const uniqueVehicles = new Set();
-
-      result.routes?.forEach((route) => {
-        if (route.vehicle) {
-          uniqueVehicles.add(route.vehicleName);
-          totalDistance += route.distance || 0;
-          totalStops += route.stops?.length || 0;
-
-          const costs = vehicleCostMap.get(route.vehicle.toString());
-          if (costs) {
-            totalFuelCost += (route.distance || 0) * costs.fuelCost;
-            totalDriverCost += (route.distance || 0) * costs.driverCost;
-          }
+    if (isEditMode) {
+      const fetchDriver = async () => {
+        try {
+          const res = await api.get(`/drivers/${id}`);
+          setFormData({
+            name: res.data.name,
+            driverId: res.data.driverId,
+            phone: res.data.phone,
+            email: res.data.email || '',
+            licenseNumber: res.data.licenseNumber,
+            address: res.data.address || ''
+          });
+        } catch (err) {
+          console.error(err);
+          notify('Failed to load driver details', 'error');
+          navigate('/drivers');
+        } finally {
+          setFetchLoading(false);
         }
-      });
-
-      return {
-        ...result,
-        totalFuelCost,
-        totalDriverCost,
-        totalCost: totalFuelCost + totalDriverCost,
-        vehiclesUsedCount: uniqueVehicles.size,
-        totalDistance,
-        totalStops,
-        avgCostPerKm:
-          totalDistance > 0 ? (totalFuelCost + totalDriverCost) / totalDistance : 0,
-        avgCostPerVehicle:
-          uniqueVehicles.size > 0
-            ? (totalFuelCost + totalDriverCost) / uniqueVehicles.size
-            : 0,
       };
-    });
-  }, [optimization]);
-
-  // --- Find best algorithm (lowest total cost) ---
-  const { bestAlgorithm, bestAlgorithmIndex } = useMemo(() => {
-    if (processedResults.length === 0)
-      return { bestAlgorithm: null, bestAlgorithmIndex: null };
-
-    const valid = processedResults.filter((r) => !r.error);
-    if (valid.length === 0)
-      return { bestAlgorithm: null, bestAlgorithmIndex: null };
-
-    const best = valid.reduce((min, curr) =>
-      (curr.totalCost || Infinity) < (min.totalCost || Infinity) ? curr : min
-    );
-    const bestIndex = processedResults.findIndex(
-      (r) => r.algorithmKey === best.algorithmKey
-    );
-    return { bestAlgorithm: best, bestAlgorithmIndex: bestIndex };
-  }, [processedResults]);
-
-  useEffect(() => {
-    if (bestAlgorithmIndex !== null) {
-      setSelectedAlgorithmIndex(bestAlgorithmIndex);
-    } else if (processedResults.length > 0) {
-      setSelectedAlgorithmIndex(0);
+      fetchDriver();
     }
-  }, [bestAlgorithmIndex, processedResults]);
+  }, [id, isEditMode, navigate, notify]);
 
-  // --- Format helpers ---
-  const formatDistance = (d) => `${Number(d || 0).toFixed(2)} km`;
-  const formatCurrency = (a) => `₹${Number(a || 0).toFixed(2)}`;
+  const onChange = e => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  if (loading)
+  const onSubmit = async e => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (isEditMode) {
+        await api.put(`/drivers/${id}`, formData);
+        notify('Driver updated successfully', 'success');
+      } else {
+        await api.post('/drivers', formData);
+        notify('Driver added successfully', 'success');
+      }
+      navigate('/drivers');
+    } catch (err) {
+      console.error(err);
+      const msg = err.response?.data?.msg || 'Error saving driver';
+      notify(msg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (fetchLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-        <div className="loading-container">
-          <div className="spinner-large"></div>
-          <p>Loading algorithm comparison...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
-
-  if (error || !optimization)
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-        <p>{error || "Optimization not found"}</p>
-        <Link to="/optimizations" className="btn btn-primary">
-          Back to Optimizations
-        </Link>
-      </div>
-    );
-
-  if (processedResults.length === 0)
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-        <h2>No Algorithm Comparison Available</h2>
-        <Link to="/optimizations/new" className="btn btn-primary mt-4">
-          Create New Optimization
-        </Link>
-      </div>
-    );
-
-  const selectedResult = processedResults[selectedAlgorithmIndex];
-  const totalVehicles = optimization.vehicles.length;
-
-  // --- Prepare data for chart ---
-  const chartData = processedResults.map((r) => ({
-    name: r.algorithm,
-    "Total Cost": r.totalCost,
-    "Fuel Cost": r.totalFuelCost,
-    "Driver Cost": r.totalDriverCost,
-    "Distance": r.totalDistance,
-  }));
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 pb-20">
-      <div className="container mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="comparison-header">
-          <Link to={`/optimizations/${id}`} className="back-link">
-            <FaArrowLeft /> Back
-          </Link>
-          <h1>Algorithm Cost & Performance Comparison</h1>
-          <p className="optimization-name">{optimization.name}</p>
-        </div>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pb-12 font-sans text-slate-800 dark:text-slate-100">
+      <div className="container mx-auto px-4 py-8 max-w-3xl">
 
-        {/* Graph Section */}
-        <div className="chart-container my-8" data-aos="fade-up">
-          <h2 className="text-xl font-semibold mb-4">Algorithm Comparison Graph</h2>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip formatter={(value) => formatCurrency(value)} />
-              <Legend />
-              <Bar dataKey="Total Cost" fill="#4f46e5" />
-              <Bar dataKey="Fuel Cost" fill="#10b981" />
-              <Bar dataKey="Driver Cost" fill="#f59e0b" />
-              <Bar dataKey="Distance" fill="#ef4444" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <Link to="/drivers" className="inline-flex items-center gap-2 text-slate-500 hover:text-blue-600 mb-6 transition-colors">
+          <FaArrowLeft /> Back to Drivers
+        </Link>
 
-        {/* Existing Table and Details go here */}
-        {/* ...keep your table and detailed metrics code as is... */}
+        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden anim-fade-up">
+          <div className="p-8 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
+            <h1 className="text-2xl font-bold flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center">
+                {isEditMode ? <FaUser /> : <FaUser />}
+              </span>
+              {isEditMode ? 'Edit Driver Profile' : 'Add New Driver'}
+            </h1>
+            <p className="mt-2 text-slate-500 dark:text-slate-400 pl-14">
+              {isEditMode ? 'Update driver information and details.' : 'Register a new driver to your fleet.'}
+            </p>
+          </div>
+
+          <form onSubmit={onSubmit} className="p-8 space-y-6">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Name */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Full Name <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <FaUser className="absolute left-4 top-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={onChange}
+                    required
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    placeholder="Enter driver's name"
+                  />
+                </div>
+              </div>
+
+              {/* Driver ID */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Driver ID <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <FaIdCard className="absolute left-4 top-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    name="driverId"
+                    value={formData.driverId}
+                    onChange={onChange}
+                    required
+                    disabled={isEditMode} // Prevent changing ID if needed, or allow it
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-60"
+                    placeholder="e.g. DRV-001"
+                  />
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Phone Number <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <FaMobileAlt className="absolute left-4 top-3.5 text-slate-400" />
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={onChange}
+                    required
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    placeholder="+91 98765 43210"
+                  />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Email Address (Optional)</label>
+                <div className="relative">
+                  <FaEnvelope className="absolute left-4 top-3.5 text-slate-400" />
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={onChange}
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    placeholder="driver@company.com"
+                  />
+                </div>
+              </div>
+
+              {/* License */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">License Number <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <FaAddressCard className="absolute left-4 top-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    name="licenseNumber"
+                    value={formData.licenseNumber}
+                    onChange={onChange}
+                    required
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    placeholder="License No."
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Address</label>
+              <div className="relative">
+                <FaMapMarkerAlt className="absolute left-4 top-3.5 text-slate-400" />
+                <textarea
+                  name="address"
+                  value={formData.address}
+                  onChange={onChange}
+                  rows="3"
+                  className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  placeholder="Full residential address"
+                ></textarea>
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3">
+              <Link to="/drivers" className="px-6 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/30 flex items-center gap-2 transition-all transform active:scale-95"
+              >
+                {loading ? <span className="animate-spin">⌛</span> : <FaSave />}
+                {isEditMode ? 'Update Driver' : 'Save Driver'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
 };
 
-export default AlgorithmComparison;
+export default DriverForm;

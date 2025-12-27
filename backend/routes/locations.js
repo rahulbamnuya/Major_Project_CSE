@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const locationController = require('../controllers/locations');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 // @route   GET api/locations
 // @desc    Get all locations
@@ -17,6 +19,11 @@ router.get('/:id', auth, locationController.getLocationById);
 // @desc    Create location
 // @access  Private
 router.post('/', auth, locationController.createLocation);
+
+// @route   POST api/locations/upload-csv
+// @desc    Bulk upload locations from CSV
+// @access  Private
+router.post('/upload-csv', [auth, upload.single('file')], locationController.uploadCSV);
 
 // @route   PUT api/locations/:id
 // @desc    Update location

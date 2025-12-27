@@ -428,6 +428,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+## 👨‍💻 **Development Team**
+
+This project was developed by a dedicated team of 5 Computer Science students, combining expertise in full-stack development, algorithm design, and UI/UX engineering.
+
+| Name | Role | Links |
+|------|------|-------|
+| **Rahul Bamaniya** | Team Lead & Full Stack Dev | [![GitHub](https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white)](https://github.com/rahulbamnuya) |
+| **Devraj Parmar** | Full Stack Developer | [![GitHub](https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white)](https://github.com/DevrajParmarr) |
+| **Prakhar Gupta** | Frontend Developer | [![GitHub](https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white)](https://github.com/prakhargupta48) |
+| **Prakhar Dangolia** | Backend Developer | [![GitHub](https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white)](https://github.com/prakhardangolia) |
+| **Vaibhav Singh** | Algorithm Specialist | [![GitHub](https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white)](https://github.com/spacelion06) |
+
+---
+
 ## 🙏 **Acknowledgments**
 
 - **OpenStreetMap** - Free mapping data

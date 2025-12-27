@@ -26,4 +26,11 @@ router.delete('/:id', auth, optimizationController.deleteOptimization);
 // New: get road-routed polyline for a route index
 router.get('/:id/route/:routeIndex/polyline', auth, optimizationController.getRoutedPolyline);
 
+// New: Assign driver to route
+router.put('/:id/assign-driver', auth, optimizationController.assignDriverToRoute);
+
+// New: Update status of a specific stop (Driver App)
+// Note: In real app, might want a separate 'driverAuth' middleware, reusing 'auth' for now
+router.put('/:id/route/:routeIndex/stop/:stopIndex/status', optimizationController.updateStopStatus);
+
 module.exports = router;

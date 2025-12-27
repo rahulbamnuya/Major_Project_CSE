@@ -14,10 +14,20 @@ const StopSchema = new mongoose.Schema({
   demand: Number,
   order: Number,
   // Time values are stored in SECONDS for precision
-  arrivalTime: Number, 
-  serviceTime: Number, 
+  arrivalTime: Number,
+  serviceTime: Number,
   timeWindowStart: Number,
   timeWindowEnd: Number,
+  status: {
+    type: String,
+    enum: ['Pending', 'En Route', 'Arrived', 'Delivered', 'Failed'],
+    default: 'Pending'
+  },
+  proofOfDelivery: {
+    signature: String, // Base64 or URL
+    photo: String, // URL
+    timestamp: Date
+  }
 }, { _id: false });
 
 /**
@@ -32,9 +42,10 @@ const RouteSchema = new mongoose.Schema({
   duration: Number, // in minutes
   totalCapacity: Number,
   routeGeometry: { // Store the geometry for mapping
-    type: [[Number]], 
+    type: [[Number]],
     default: undefined
-  }
+  },
+  driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver' }
 }, { _id: false });
 
 // ... (AlgorithmResultSchema and OptimizationSchema remain structurally the same but will now use the corrected RouteSchema)

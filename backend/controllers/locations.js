@@ -15,14 +15,14 @@ exports.getLocations = async (req, res) => {
 exports.getLocationById = async (req, res) => {
   try {
     const location = await Location.findById(req.params.id);
-    
+
     if (!location) {
       return res.status(404).json({ msg: 'Location not found' });
     }
     if (location.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'User not authorized' });
     }
-    
+
     res.json(location);
   } catch (err) {
     console.error(err.message);
@@ -36,19 +36,19 @@ exports.getLocationById = async (req, res) => {
 // Create location
 exports.createLocation = async (req, res) => {
   // ================== DESTRUCTURE NEW FIELDS ==================
-  const { 
-    name, 
-    address, 
-    latitude, 
-    longitude, 
-    demand, 
+  const {
+    name,
+    address,
+    latitude,
+    longitude,
+    demand,
     isDepot,
     serviceTime,
     timeWindowStart,
     timeWindowEnd
   } = req.body;
   // ==========================================================
-  
+
   try {
     const newLocation = new Location({
       name,
@@ -64,7 +64,7 @@ exports.createLocation = async (req, res) => {
       // =====================================================
       user: req.user.id
     });
-    
+
     const location = await newLocation.save();
     res.json(location);
   } catch (err) {
@@ -76,53 +76,53 @@ exports.createLocation = async (req, res) => {
 // Update location
 exports.updateLocation = async (req, res) => {
   // ================== DESTRUCTURE NEW FIELDS ==================
-  const { 
-    name, 
-    address, 
-    latitude, 
-    longitude, 
-    demand, 
+  const {
+    name,
+    address,
+    latitude,
+    longitude,
+    demand,
     isDepot,
     serviceTime,
     timeWindowStart,
     timeWindowEnd
   } = req.body;
   // ==========================================================
-  
+
   try {
     let location = await Location.findById(req.params.id);
-    
+
     if (!location) {
       return res.status(404).json({ msg: 'Location not found' });
     }
     if (location.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'User not authorized' });
     }
-    
+
     // Build the update object
     const updateFields = {
-        name,
-        address,
-        latitude,
-        longitude,
-        demand,
-        isDepot,
-        serviceTime,
-        timeWindowStart,
-        timeWindowEnd
+      name,
+      address,
+      latitude,
+      longitude,
+      demand,
+      isDepot,
+      serviceTime,
+      timeWindowStart,
+      timeWindowEnd
     };
-    
+
     // Filter out undefined fields so we don't overwrite existing data with nothing
     Object.keys(updateFields).forEach(key => {
-        if (updateFields[key] === undefined) {
-            delete updateFields[key];
-        }
+      if (updateFields[key] === undefined) {
+        delete updateFields[key];
+      }
     });
 
     location = await Location.findByIdAndUpdate(
-        req.params.id,
-        { $set: updateFields },
-        { new: true } // This option returns the updated document
+      req.params.id,
+      { $set: updateFields },
+      { new: true } // This option returns the updated document
     );
 
     res.json(location);
@@ -139,14 +139,14 @@ exports.updateLocation = async (req, res) => {
 exports.deleteLocation = async (req, res) => {
   try {
     const location = await Location.findById(req.params.id);
-    
+
     if (!location) {
       return res.status(404).json({ msg: 'Location not found' });
     }
     if (location.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'User not authorized' });
     }
-    
+
     await Location.deleteOne({ _id: req.params.id, user: req.user.id });
     res.json({ msg: 'Location removed' });
   } catch (err) {
@@ -155,5 +155,52 @@ exports.deleteLocation = async (req, res) => {
       return res.status(404).json({ msg: 'Location not found' });
     }
     res.status(500).send('Server error');
+  }
+};
+
+// Bulk Upload from CSV
+exports.uploadCSV = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ msg: 'No file uploaded' });
+    }
+
+    const fileContent = req.file.buffer.toString('utf8');
+    const rows = fileContent.split(/\r?\n/);
+
+    // Assume Header: Name, Address, Latitude, Longitude, Demand, ServiceTime
+    // Skip header row
+    const locationsToInsert = [];
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i].trim();
+      if (!row) continue;
+
+      const cols = row.split(','); // Simple CSV split (note: doesn't handle quoted commas)
+      if (cols.length < 4) continue;
+
+      const [name, address, lat, lng, demand, serviceTime] = cols;
+
+      if (name && lat && lng) {
+        locationsToInsert.push({
+          user: req.user.id,
+          name: name.trim(),
+          address: address ? address.trim() : '',
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lng),
+          demand: demand ? parseInt(demand) : 0,
+          serviceTime: serviceTime ? parseInt(serviceTime) * 60 : 0 // assume minutes in CSV
+        });
+      }
+    }
+
+    if (locationsToInsert.length > 0) {
+      await Location.insertMany(locationsToInsert);
+    }
+
+    res.json({ msg: `Successfully imported ${locationsToInsert.length} locations` });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error during CSV processing');
   }
 };

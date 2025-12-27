@@ -24,6 +24,10 @@ import BottomNav from './components/BottomNav';
 import Drivers from './pages/Drivers';
 import DriverForm from './pages/DriverForm';
 
+import DriverPortal from './pages/DriverPortal';
+import Profile from './pages/Profile';
+import NotFound from './pages/NotFound';
+
 
 function App() {
   useEffect(() => {
@@ -49,6 +53,7 @@ function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
+                  <Route path="/portal" element={<DriverPortal />} />
 
                   <Route path="/dashboard" element={
                     <PrivateRoute>
@@ -127,6 +132,15 @@ function App() {
                   <Route path="/drivers/edit/:id" element={
                     <PrivateRoute><DriverForm /></PrivateRoute>
                   } />
+
+                  <Route path="/profile" element={
+                    <PrivateRoute>
+                      <Profile />
+                    </PrivateRoute>
+                  } />
+
+                  {/* 404 Route - Must be last */}
+                  <Route path="*" element={<NotFound />} />
 
                 </Routes>
               </div>

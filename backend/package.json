@@ -17,6 +17,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
@@ -25,10 +26,10 @@
     "geolib": "^3.3.4",
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^7.0.3",
+    "multer": "^2.0.2",
     "openrouteservice": "^0.1.2",
     "openrouteservice-js": "^0.4.1",
-    "socket.io": "^4.8.1",
-    "axios": "^1.7.9"
+    "socket.io": "^4.8.1"
   },
   "optionalDependencies": {
     "@google/ortools": "^9.5.0"
