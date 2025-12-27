@@ -20,7 +20,9 @@ app.use(cors({
     const allowed = [
       'http://localhost:3000',
       'http://127.0.0.1:3000',
+      'https://majorprojectcse-production.up.railway.app', // New production URL
       'https://complexrouteoptimizer.netlify.app',
+      'https://routeoptimizationmajor.vercel.app',
       process.env.FRONTEND_URL,
     ].filter(Boolean);
     if (allowed.includes(origin)) return callback(null, true);
