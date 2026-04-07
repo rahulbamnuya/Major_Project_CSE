@@ -24,6 +24,7 @@ import BottomNav from './components/BottomNav';
 import Drivers from './pages/Drivers';
 import DriverForm from './pages/DriverForm';
 
+import DriverRouteView from './pages/DriverRouteView';
 import DriverPortal from './pages/DriverPortal';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
@@ -53,6 +54,10 @@ function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
+
+                  {/* Public Driver Route View (QR Code Access) */}
+                  <Route path="/driver/view/:id/:routeIndex" element={<DriverRouteView />} />
+
                   <Route path="/portal" element={<DriverPortal />} />
 
                   <Route path="/dashboard" element={

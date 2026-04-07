@@ -13,6 +13,11 @@ router.get('/', auth, optimizationController.getOptimizations);
 // @access  Private
 router.get('/:id', auth, optimizationController.getOptimizationById);
 
+// @route   GET api/optimization/:id/public
+// @desc    Get optimization publicly (QR Code)
+// @access  Public
+router.get('/:id/public', optimizationController.getOptimizationPublic);
+
 // @route   POST api/optimization
 // @desc    Create optimization
 // @access  Private

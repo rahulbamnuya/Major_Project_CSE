@@ -38,6 +38,7 @@ class OptimizeRequest(BaseModel):
     include_geometry: Optional[bool] = True
     time_limit_seconds: Optional[int] = 30
     traffic_factor: Optional[float] = 1.25
+    avg_speed_kmh: Optional[int] = 25  # Average speed in km/h, configurable from frontend
     @validator("useTimeWindows", pre=True)
     def parse_use_time_windows(cls, v):
         if isinstance(v, bool): return v
@@ -61,6 +62,7 @@ def optimize(req: OptimizeRequest):
         # ==================== DYNAMIC SERVICE TIME CALCULATION ====================
         BASE_SERVICE_TIME_MINUTES = 3  # Fixed time for parking, paperwork, etc.
         UNITS_PER_MINUTE_OF_UNLOADING = 10  # e.g., 100 units = 10 minutes
+        REALISTIC_AVG_SPEED_KMH = 40
 
         service_times_seconds = []
         logging.info("Calculating service times based on demand...")
@@ -83,7 +85,8 @@ def optimize(req: OptimizeRequest):
             service_times_seconds.append(int(total_minutes * 60))
         # ========================================================================
 
-        REALISTIC_AVG_SPEED_KMH = 25
+        # Use the average speed from the request (configurable from frontend)
+        avg_speed_kmh = req.avg_speed_kmh
 
         if req.useTimeWindows:
             logging.info("Solving VRP with Time Window constraints.")
@@ -93,14 +96,14 @@ def optimize(req: OptimizeRequest):
             optimized = solve_cvrp_with_time_windows(
                 distance_matrix=distance_matrix, vehicles=vehicles_dict, demands=req.demands,
                 time_windows_seconds=time_windows_seconds, service_times_seconds=service_times_seconds,
-                avg_speed_kmh=REALISTIC_AVG_SPEED_KMH, time_limit_seconds=req.time_limit_seconds, traffic_factor=req.traffic_factor
+                avg_speed_kmh=avg_speed_kmh, time_limit_seconds=req.time_limit_seconds, traffic_factor=req.traffic_factor
             )
         else:
             logging.info("Solving basic VRP without Time Window constraints.")
             optimized = solve_cvrp_without_restrictions(
                 distance_matrix=distance_matrix, vehicles=vehicles_dict, demands=req.demands,
                 service_times_seconds=service_times_seconds,
-                avg_speed_kmh=REALISTIC_AVG_SPEED_KMH, time_limit_seconds=req.time_limit_seconds, traffic_factor=req.traffic_factor
+                avg_speed_kmh=avg_speed_kmh, time_limit_seconds=req.time_limit_seconds, traffic_factor=req.traffic_factor
             )
 
         if not optimized:

@@ -4,7 +4,7 @@ const { calculateDistance } = require('../utils/optimizationUtils');
 // --- CONFIGURATION CONSTANTS (NOW IN SECONDS) ---
 const BASE_SERVICE_TIME_SECONDS = 3 * 60; // 3 minutes
 const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60; // 10 units per minute
-const AVERAGE_SPEED_KMH = 40;
+const DEFAULT_SPEED_KMH = 40;
 const TRAFFIC_FACTOR = 1.25;
 const DEPOT_START_TIME_SECONDS = 360 * 60; // 6:00 AM (360 * 60 = 21600)
 const DEPOT_END_TIME_SECONDS = 1080 * 60;  // 6:00 PM (1080 * 60 = 64800)
@@ -16,6 +16,7 @@ const toId = (objId) => objId && objId.toString();
 // --- Construct solution for a single ant (robust) ---
 function constructSolutionForAnt(vehicles, locations, depot, distances, pheromones, alpha, beta, options = {}) {
     const useTimeWindows = options.useTimeWindows || false;
+    const speedKmh = options.avgSpeedKmh || DEFAULT_SPEED_KMH;
 
     const depotId = toId(depot._id);
     // Build set of visitable ids (ensure depot is included if not in locations)
@@ -81,7 +82,8 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
                 beta,
                 currentTime,
                 depotId,
-                useTimeWindows
+                useTimeWindows,
+                speedKmh
             );
 
             if (!nextLocation) break; // no feasible candidate
@@ -91,7 +93,7 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
             const distanceToNext = (distEntryFrom && distEntryFrom[toId(nextLocation._id)]) ??
                 calculateDistance(currentLocation.latitude, currentLocation.longitude, nextLocation.latitude, nextLocation.longitude);
 
-            const travelTime = ((distanceToNext / AVERAGE_SPEED_KMH) * 3600) * TRAFFIC_FACTOR;
+            const travelTime = ((distanceToNext / speedKmh) * 3600) * TRAFFIC_FACTOR;
             const arrivalTime = currentTime + travelTime;
 
             const demand = nextLocation.demand || 0;
@@ -144,7 +146,7 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
         const lastId = toId(currentLocation._id);
         const distFromLast = distances[lastId] && distances[lastId][depotId];
         const distanceToDepot = distFromLast ?? calculateDistance(currentLocation.latitude, currentLocation.longitude, depot.latitude, depot.longitude);
-        const travelTimeToDepot = ((distanceToDepot / AVERAGE_SPEED_KMH) * 3600) * TRAFFIC_FACTOR;
+        const travelTimeToDepot = ((distanceToDepot / speedKmh) * 3600) * TRAFFIC_FACTOR;
         currentTime += travelTimeToDepot;
 
         route.stops.push({
@@ -194,7 +196,8 @@ function chooseNextLocation(
     beta,
     currentTime,
     depotId,
-    useTimeWindows
+    useTimeWindows,
+    speedKmh
 ) {
     const currentId = toId(current._id);
     const locationMap = new Map(allLocations.map(l => [toId(l._id), l]));
@@ -221,7 +224,7 @@ function chooseNextLocation(
         if (distCurToCand == null || Number.isNaN(distCurToCand)) continue;
 
         // compute arrival and service times
-        const travelTimeToCandidate = ((distCurToCand / AVERAGE_SPEED_KMH) * 3600) * TRAFFIC_FACTOR;
+        const travelTimeToCandidate = ((distCurToCand / speedKmh) * 3600) * TRAFFIC_FACTOR;
         const arrivalAtCandidate = currentTime + travelTimeToCandidate;
 
         const serviceTimeRaw = BASE_SERVICE_TIME_SECONDS + ((candidate.demand || 0) / UNITS_PER_SECOND_OF_UNLOADING);
@@ -245,7 +248,7 @@ function chooseNextLocation(
         // check return-to-depot feasibility: compute correct travel time to depot
         const distCandidateToDepot = (distances[candidateId] && distances[candidateId][depotId]) ??
             calculateDistance(candidate.latitude, candidate.longitude, /* assume depot coords unknown here; caller usually had them */ candidate.latitude, candidate.longitude);
-        const travelTimeToDepot = ((distCandidateToDepot / AVERAGE_SPEED_KMH) * 3600) * TRAFFIC_FACTOR;
+        const travelTimeToDepot = ((distCandidateToDepot / speedKmh) * 3600) * TRAFFIC_FACTOR;
         const finalArrivalDepot = departureFromCandidate + travelTimeToDepot;
 
         if (finalArrivalDepot > DEPOT_END_TIME_SECONDS) {

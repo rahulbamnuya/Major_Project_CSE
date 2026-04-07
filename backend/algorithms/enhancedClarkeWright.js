@@ -6,238 +6,303 @@ const { enhancedLocalSearch } = require('./localSearch');
 //     // ... Paste the entire logic of the enhancedClarkeWrightAlgorithm here
 //     return routes;
 // };
-exports.enhancedClarkeWrightAlgorithm =(vehicles, locations, depot) =>{
-  console.log("4")
- const speedKmh = 40;
- const toId = (objId) => objId.toString();
+// =================================================================
+// MAIN: Enhanced Clarke-Wright Algorithm
+// =================================================================
+exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {}) => {
+  const useTimeWindows = options.useTimeWindows || false;
+  const avgSpeedKmh = options.avgSpeedKmh || 40;
 
- // Build distance matrix
- const distances = {};
- const allIds = locations.map((l) => toId(l._id));
- locations.forEach((l1) => {
-   const id1 = toId(l1._id);
-   distances[id1] = {};
-   locations.forEach((l2) => {
-     const id2 = toId(l2._id);
-     distances[id1][id2] = calculateDistance(
-       l1.latitude, l1.longitude, l2.latitude, l2.longitude
-     );
-   });
- });
+  console.log(`🚚 Running Enhanced Clarke-Wright (Speed: ${avgSpeedKmh}km/h)...`);
 
- const depotId = toId(depot._id);
- const nonDepot = locations.filter((l) => toId(l._id) !== depotId);
+  const toId = (objId) => objId.toString();
+  const depotId = toId(depot._id);
 
- // Enhanced savings calculation with multiple advanced components
- const savings = [];
- for (let i = 0; i < nonDepot.length; i++) {
-   for (let j = i + 1; j < nonDepot.length; j++) {
-     const li = nonDepot[i];
-     const lj = nonDepot[j];
-     const idI = toId(li._id);
-     const idJ = toId(lj._id);
+  // Constants
+  const BASE_SERVICE_TIME_SECONDS = 3 * 60;
+  const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60;
+  const TRAFFIC_FACTOR = 1.25;
+  const DEPOT_START_TIME_SECONDS = 6 * 3600;
 
-     const basicSaving = distances[depotId][idI] + distances[depotId][idJ] - distances[idI][idJ];
+  // Build distance matrix (include depot)
+  const distances = {};
+  const allLocations = [depot, ...locations];
 
-     // Angular component for better route continuity
-     const angleI = Math.atan2(li.latitude - depot.latitude, li.longitude - depot.longitude);
-     const angleJ = Math.atan2(lj.latitude - depot.latitude, lj.longitude - depot.longitude);
-     const angularDiff = Math.abs(angleI - angleJ);
-     const angularBonus = Math.min(angularDiff, 2 * Math.PI - angularDiff) / Math.PI;
+  allLocations.forEach((l1) => {
+    const id1 = toId(l1._id);
+    distances[id1] = {};
+    allLocations.forEach((l2) => {
+      const id2 = toId(l2._id);
+      distances[id1][id2] = calculateDistance(
+        l1.latitude, l1.longitude, l2.latitude, l2.longitude
+      );
+    });
+  });
 
-     // Capacity compatibility bonus
-     const demandI = li.demand || 0;
-     const demandJ = lj.demand || 0;
-     const combinedDemand = demandI + demandJ;
-     const maxVehicleCapacity = vehicles.length > 0 ? Math.max(...vehicles.map(v => v.capacity || 0)) : Infinity;
-     const capacityCompatibility = combinedDemand <= maxVehicleCapacity ? 1 : Math.max(0.1, maxVehicleCapacity / combinedDemand);
+  const nonDepot = locations.filter((l) => toId(l._id) !== depotId);
 
-     // Service time consideration (estimated based on demand)
-     const serviceTimeI = Math.max(5, demandI * 2); // Minimum 5 minutes, 2 minutes per unit demand
-     const serviceTimeJ = Math.max(5, demandJ * 2);
-     const combinedServiceTime = serviceTimeI + serviceTimeJ;
+  // Enhanced savings calculation
+  const savings = [];
+  for (let i = 0; i < nonDepot.length; i++) {
+    for (let j = i + 1; j < nonDepot.length; j++) {
+      const li = nonDepot[i];
+      const lj = nonDepot[j];
+      const idI = toId(li._id);
+      const idJ = toId(lj._id);
 
-     // Time window compatibility (placeholder for future implementation)
-     const timeCompatibility = 1; // Would be calculated based on time windows if available
+      // Basic C-W Saving: d(D,i) + d(D,j) - d(i,j)
+      const basicSaving = distances[depotId][idI] + distances[depotId][idJ] - distances[idI][idJ];
 
-     // Urgency factor based on demand size (higher demand = higher priority)
-     const urgencyFactor = Math.min(1.2, 1 + (combinedDemand / maxVehicleCapacity) * 0.2);
+      // Enhanced factors
+      const angleI = Math.atan2(li.latitude - depot.latitude, li.longitude - depot.longitude);
+      const angleJ = Math.atan2(lj.latitude - depot.latitude, lj.longitude - depot.longitude);
+      const angularDiff = Math.abs(angleI - angleJ);
+      const angularBonus = Math.min(angularDiff, 2 * Math.PI - angularDiff) / Math.PI;
 
-     // Distance efficiency bonus (prefer closer pairs)
-     const distanceEfficiency = Math.max(0.8, 1 - (distances[idI][idJ] / 50)); // Bonus for pairs within 50km
+      const demandI = li.demand || 0;
+      const demandJ = lj.demand || 0;
+      const combinedDemand = demandI + demandJ;
+      const maxVehicleCapacity = vehicles.length > 0 ? Math.max(...vehicles.map(v => v.capacity || 0)) : Infinity;
+      const capacityCompatibility = combinedDemand <= maxVehicleCapacity ? 1 : Math.max(0.1, maxVehicleCapacity / combinedDemand);
 
-     // Enhanced saving with multiple factors
-     const enhancedSaving = basicSaving *
-       (1 + angularBonus * 0.15) *           // Angular continuity
-       capacityCompatibility *                // Capacity feasibility
-       urgencyFactor *                       // Demand priority
-       distanceEfficiency *                  // Distance efficiency
-       timeCompatibility;                    // Time compatibility
+      const distanceEfficiency = Math.max(0.8, 1 - (distances[idI][idJ] / 50));
 
-     savings.push({
-       i: li,
-       j: lj,
-       saving: enhancedSaving,
-       basicSaving,
-       angularBonus,
-       capacityCompatibility,
-       combinedDemand,
-       urgencyFactor,
-       distanceEfficiency,
-       serviceTime: combinedServiceTime
-     });
-   }
- }
- savings.sort((a, b) => b.saving - a.saving);
+      const enhancedSaving = basicSaving *
+        (1 + angularBonus * 0.15) *
+        capacityCompatibility *
+        distanceEfficiency;
 
- // Initialize routes
- const makeDepotStop = (order) => ({
-   locationId: depot._id,
-   locationName: depot.name,
-   latitude: depot.latitude,
-   longitude: depot.longitude,
-   demand: depot.demand || 0,
-   order
- });
+      savings.push({
+        i: li, j: lj, saving: enhancedSaving
+      });
+    }
+  }
+  savings.sort((a, b) => b.saving - a.saving);
 
- const routes = nonDepot.map((loc) => {
-   const stops = [
-     makeDepotStop(0),
-     {
-       locationId: loc._id,
-       locationName: loc.name,
-       latitude: loc.latitude,
-       longitude: loc.longitude,
-       demand: loc.demand || 0,
-       order: 1
-     },
-     makeDepotStop(2)
-   ];
-   const distance = distances[depotId][toId(loc._id)] * 2;
-   return {
-     vehicle: undefined,
-     vehicleName: 'Unassigned',
-     stops,
-     distance,
-     duration: Math.round((distance / speedKmh) * 60),
-     totalCapacity: loc.demand || 0
-   };
- });
+  // Initialize routes (single customer per route)
+  const makeDepotStop = (order) => ({
+    locationId: depot._id,
+    locationName: depot.name,
+    latitude: depot.latitude,
+    longitude: depot.longitude,
+    demand: 0,
+    order,
+    arrivalTime: DEPOT_START_TIME_SECONDS,
+    serviceTime: 0,
+    departureTime: DEPOT_START_TIME_SECONDS
+  });
 
- const maxCapacity = vehicles.length > 0 ? Math.max(...vehicles.map((v) => v.capacity || 0)) : 0;
+  const routes = nonDepot.map((loc) => {
+    // Initial calculation for single route
+    // Depot -> Loc -> Depot
+    const distTo = distances[depotId][toId(loc._id)];
+    const distFrom = distances[toId(loc._id)][depotId];
 
- const findRouteIndexByLocation = (idStr) => {
-   for (let r = 0; r < routes.length; r++) {
-     const rt = routes[r];
-     const foundIdx = rt.stops.findIndex((s) => toId(s.locationId) === idStr);
-     if (foundIdx !== -1) {
-       return { routeIndex: r, stopIndex: foundIdx };
-     }
-   }
-   return null;
- };
+    // Arrival at Loc
+    const travelTime1 = ((distTo / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR;
+    const arrival1 = DEPOT_START_TIME_SECONDS + travelTime1;
 
- const isStartEndpoint = (rt, idx) => idx === 1;
- const isEndEndpoint = (rt, idx) => idx === rt.stops.length - 2;
+    // Service
+    const demand = loc.demand || 0;
+    const serviceTime = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
 
- const recomputeRouteMetrics = (rt) => {
-   let dist = 0;
-   for (let k = 0; k < rt.stops.length - 1; k++) {
-     const from = rt.stops[k];
-     const to = rt.stops[k + 1];
-     const fromId = toId(from.locationId);
-     const toIdStr = toId(to.locationId);
-     dist += distances[fromId]?.[toIdStr] ?? calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
-   }
-   rt.distance = dist;
-   rt.duration = Math.round((dist / speedKmh) * 60);
- };
+    // Time Window logic (simplified for initialization)
+    let finalArrival = arrival1;
+    let wait = 0;
+    if (useTimeWindows && loc.startTimeWindowSeconds) {
+      if (finalArrival < loc.startTimeWindowSeconds) {
+        wait = loc.startTimeWindowSeconds - finalArrival;
+        finalArrival = loc.startTimeWindowSeconds;
+      }
+    }
+    const departure1 = finalArrival + serviceTime;
 
- // Enhanced merging with capacity consideration
- for (const s of savings) {
-   const idI = toId(s.i._id);
-   const idJ = toId(s.j._id);
+    // Return to Depot
+    const travelTime2 = ((distFrom / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR;
+    const arrivalDepot = departure1 + travelTime2;
 
-   const posI = findRouteIndexByLocation(idI);
-   const posJ = findRouteIndexByLocation(idJ);
-   if (!posI || !posJ || posI.routeIndex === posJ.routeIndex) continue;
+    const stops = [
+      makeDepotStop(0),
+      {
+        locationId: loc._id,
+        locationName: loc.name,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        demand: loc.demand || 0,
+        order: 1,
+        arrivalTime: Math.round(finalArrival),
+        serviceTime: Math.round(serviceTime + wait),
+        departureTime: Math.round(departure1),
+        startTimeWindowSeconds: loc.startTimeWindowSeconds,
+        endTimeWindowSeconds: loc.endTimeWindowSeconds
+      },
+      {
+        ...makeDepotStop(2),
+        arrivalTime: Math.round(arrivalDepot),
+        departureTime: Math.round(arrivalDepot)
+      }
+    ];
 
-   const r1 = routes[posI.routeIndex];
-   const r2 = routes[posJ.routeIndex];
+    return {
+      vehicle: undefined,
+      vehicleName: 'Unassigned',
+      stops,
+      distance: distTo + distFrom,
+      duration: Math.round((arrivalDepot - DEPOT_START_TIME_SECONDS) / 60),
+      totalCapacity: loc.demand || 0
+    };
+  });
 
-   const iAtEndOfR1 = isEndEndpoint(r1, posI.stopIndex);
-   const iAtStartOfR1 = isStartEndpoint(r1, posI.stopIndex);
-   const jAtEndOfR2 = isEndEndpoint(r2, posJ.stopIndex);
-   const jAtStartOfR2 = isStartEndpoint(r2, posJ.stopIndex);
+  const maxCapacity = vehicles.length > 0 ? Math.max(...vehicles.map((v) => v.capacity || 0)) : 0;
+  const findRouteIndexByLocation = (idStr) => {
+    for (let r = 0; r < routes.length; r++) {
+      if (routes[r].stops.some(s => toId(s.locationId) === idStr && s.order !== 0 && s.order !== routes[r].stops.length - 1)) {
+        return r;
+      }
+    }
+    return -1;
+  };
 
-   let newStops = null;
+  const recomputeRouteMetrics = (rt) => {
+    let totalDist = 0;
+    let currentTime = DEPOT_START_TIME_SECONDS;
+    rt.stops[0].arrivalTime = currentTime;
+    rt.stops[0].departureTime = currentTime;
 
-   if (iAtEndOfR1 && jAtStartOfR2) {
-     newStops = [...r1.stops.slice(0, -1), ...r2.stops.slice(1)];
-   } else if (jAtEndOfR2 && iAtStartOfR1) {
-     newStops = [...r2.stops.slice(0, -1), ...r1.stops.slice(1)];
-   }
+    for (let k = 0; k < rt.stops.length - 1; k++) {
+      const from = rt.stops[k];
+      const to = rt.stops[k + 1];
+      const fromId = toId(from.locationId);
+      const toIdStr = toId(to.locationId);
 
-   if (!newStops) continue;
+      const dist = distances[fromId]?.[toIdStr] ?? calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
+      totalDist += dist;
 
-   const combinedDemand = (r1.totalCapacity || 0) + (r2.totalCapacity || 0);
-   if (combinedDemand > maxCapacity) continue;
+      const travelTime = ((dist / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR;
+      let arrival = currentTime + travelTime;
 
-   newStops = newStops.map((st, idx) => ({ ...st, order: idx }));
-   const merged = {
-     vehicle: undefined,
-     vehicleName: 'Unassigned',
-     stops: newStops,
-     distance: 0,
-     duration: 0,
-     totalCapacity: combinedDemand
-   };
-   recomputeRouteMetrics(merged);
+      let service = 0;
+      let wait = 0;
 
-   const idxToRemove = Math.max(posI.routeIndex, posJ.routeIndex);
-   const idxToReplace = Math.min(posI.routeIndex, posJ.routeIndex);
-   routes.splice(idxToRemove, 1);
-   routes.splice(idxToReplace, 1, merged);
- }
+      // Logic for customer stops (not depot)
+      if (k + 1 < rt.stops.length - 1) { // 'to' is not the final depot
+        const demand = to.demand || 0;
+        service = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
 
- // Advanced vehicle assignment with load balancing
- const vehicleSlots = [];
- vehicles.forEach((v) => {
-   const count = v.count || 1;
-   for (let i = 0; i < count; i++) {
-     vehicleSlots.push({
-       _id: v._id,
-       name: v.name,
-       capacity: v.capacity || 0,
-       used: false,
-       currentLoad: 0
-     });
-   }
- });
+        if (useTimeWindows && to.startTimeWindowSeconds != null) {
+          if (arrival < to.startTimeWindowSeconds) {
+            wait = to.startTimeWindowSeconds - arrival;
+            arrival = to.startTimeWindowSeconds;
+          }
+        }
+      }
 
- // Sort routes by demand descending, vehicles by capacity descending
- routes.sort((a, b) => (b.totalCapacity || 0) - (a.totalCapacity || 0));
- vehicleSlots.sort((a, b) => b.capacity - a.capacity);
+      to.arrivalTime = Math.round(arrival);
+      // Store raw service time + wait time if needed, or just service. 
+      // Usually serviceTime field implies duration of stay.
+      to.serviceTime = Math.round(service + wait);
 
- // Best-fit assignment
- for (const route of routes) {
-   const bestSlot = vehicleSlots
-     .filter(vs => !vs.used && vs.capacity >= (route.totalCapacity || 0))
-     .sort((a, b) => (a.capacity - (a.currentLoad + (route.totalCapacity || 0))) -
-                     (b.capacity - (b.currentLoad + (route.totalCapacity || 0))))[0];
+      currentTime = arrival + service;
+      to.departureTime = Math.round(currentTime);
+    }
 
-   if (bestSlot) {
-     route.vehicle = bestSlot._id;
-     route.vehicleName = bestSlot.name;
-     bestSlot.used = true;
-     bestSlot.currentLoad += route.totalCapacity || 0;
-   }
- }
+    rt.distance = totalDist;
+    rt.duration = Math.round((currentTime - DEPOT_START_TIME_SECONDS) / 60);
+  };
 
- // Advanced local search with multiple techniques
- routes.forEach((route) => {
-   enhancedLocalSearch(route, distances, speedKmh);
- });
+  // Merge Process
+  for (const s of savings) {
+    const idI = toId(s.i._id);
+    const idJ = toId(s.j._id);
 
- return routes;
+    const rIdxI = findRouteIndexByLocation(idI);
+    const rIdxJ = findRouteIndexByLocation(idJ);
+
+    if (rIdxI === -1 || rIdxJ === -1 || rIdxI === rIdxJ) continue;
+
+    const r1 = routes[rIdxI];
+    const r2 = routes[rIdxJ];
+
+    // Check merge validity (i must be last of r1, j must be first of r2, simplified for interior logic)
+    // Actually standard C-W checks if i is connected to depot in r1, j is connected to depot in r2.
+    // Specifically: i is last customer in r1, j is first customer in r2.
+
+    const iIsLast = toId(r1.stops[r1.stops.length - 2].locationId) === idI;
+    const jIsFirst = toId(r2.stops[1].locationId) === idJ;
+    // Also check reverse merge: j is last of r2, i is first of r1
+    const jIsLast = toId(r2.stops[r2.stops.length - 2].locationId) === idJ;
+    const iIsFirst = toId(r1.stops[1].locationId) === idI;
+
+    let newStops = null;
+    let keepR1 = false; // Flag to know which one keeps the new stops
+
+    if (iIsLast && jIsFirst) {
+      // Merge: r1 + r2 (excluding depots in between)
+      // r1: D ... i D
+      // r2: D j ... D
+      // Result: D ... i j ... D
+      newStops = [...r1.stops.slice(0, -1), ...r2.stops.slice(1)];
+    } else if (jIsLast && iIsFirst) {
+      // Merge: r2 + r1
+      newStops = [...r2.stops.slice(0, -1), ...r1.stops.slice(1)];
+    }
+
+    if (!newStops) continue;
+
+    const combinedDemand = (r1.totalCapacity || 0) + (r2.totalCapacity || 0);
+    if (combinedDemand > maxCapacity) continue;
+
+    // Fix orders
+    newStops.forEach((st, idx) => st.order = idx);
+
+    const mergedRoute = {
+      vehicle: undefined,
+      vehicleName: 'Unassigned',
+      stops: newStops,
+      totalCapacity: combinedDemand,
+      distance: 0,
+      duration: 0
+    };
+
+    recomputeRouteMetrics(mergedRoute);
+
+    // Replace the two routes with merged one
+    // Remove larger index first to avoid shifting problems
+    const idx1 = Math.max(rIdxI, rIdxJ);
+    const idx2 = Math.min(rIdxI, rIdxJ);
+    routes.splice(idx1, 1);
+    routes.splice(idx2, 1, mergedRoute);
+  }
+
+  // Assign Vehicles
+  const vehicleSlots = [];
+  vehicles.forEach((v) => {
+    const count = v.count || 1;
+    for (let i = 0; i < count; i++) {
+      vehicleSlots.push({ ...v, capacity: v.capacity || 0, used: false, currentLoad: 0 });
+    }
+  });
+
+  routes.sort((a, b) => (b.totalCapacity || 0) - (a.totalCapacity || 0));
+  vehicleSlots.sort((a, b) => b.capacity - a.capacity);
+
+  for (const route of routes) {
+    const bestSlot = vehicleSlots.find(vs => !vs.used && vs.capacity >= (route.totalCapacity || 0));
+    if (bestSlot) {
+      route.vehicle = bestSlot._id;
+      route.vehicleName = bestSlot.name;
+      bestSlot.used = true;
+    }
+  }
+
+  // Apply Local Search
+  routes.forEach((route) => {
+    // Only apply if enough stops
+    if (route.stops.length > 3) {
+      enhancedLocalSearch(route, distances, avgSpeedKmh);
+      recomputeRouteMetrics(route);
+    }
+  });
+
+  return routes;
 }

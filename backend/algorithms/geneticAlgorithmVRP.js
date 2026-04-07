@@ -384,12 +384,16 @@ function mutate(solution, distances, useTimeWindows = false, speedKmh = DEFAULT_
 // =================================================================
 exports.geneticAlgorithmVRP = (vehicles, locations, depot, options = {}) => {
     const useTimeWindows = options.useTimeWindows || false;
-    const speedKmh = DEFAULT_SPEED_KMH;
+    const speedKmh = options.avgSpeedKmh || DEFAULT_SPEED_KMH;
+
+    console.log(`🚚 Running Genetic Algorithm (Time Windows: ${useTimeWindows}, Speed: ${speedKmh}km/h)...`);
 
     const distances = {};
-    locations.forEach(l1 => {
+    const allLocations = [depot, ...locations];
+
+    allLocations.forEach(l1 => {
         distances[toId(l1._id)] = {};
-        locations.forEach(l2 => {
+        allLocations.forEach(l2 => {
             distances[toId(l1._id)][toId(l2._id)] = calculateDistance(l1.latitude, l1.longitude, l2.latitude, l2.longitude);
         });
     });

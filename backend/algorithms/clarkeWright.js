@@ -4,7 +4,10 @@ const { improveRouteWithLocalSearch } = require('./localSearch');
 // =================================================================
 // CONSTANTS
 // =================================================================
-const BASE_SPEED_KMH = 40;
+// =================================================================
+// CONSTANTS
+// =================================================================
+const DEFAULT_SPEED_KMH = 40; // Fallback if not provided
 const TRAFFIC_FACTOR = 1.25;
 const DEPOT_START_TIME_SECONDS = 6 * 3600; // 6:00 AM
 const DEPOT_END_TIME_SECONDS = 18 * 3600; // 6:00 PM
@@ -16,8 +19,8 @@ const toId = (id) => id.toString();
 // =================================================================
 // HELPER FUNCTIONS
 // =================================================================
-const computeTravelTime = (distanceMeters) =>
-  ((distanceMeters / (BASE_SPEED_KMH * 1000)) * 3600) * TRAFFIC_FACTOR;
+const computeTravelTime = (distanceMeters, speedKmh) =>
+  ((distanceMeters / (speedKmh * 1000)) * 3600) * TRAFFIC_FACTOR;
 
 const formatTimeWindow = (start, end) => ({
   startTimeWindowSeconds: start != null ? start * 60 : DEPOT_START_TIME_SECONDS,
@@ -30,7 +33,9 @@ const formatTimeWindow = (start, end) => ({
 // FIX 1: The function name now matches what the controller imports.
 exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, options = {}) => {
   const useTimeWindows = options.useTimeWindows || false;
-  console.log("🚚 Running Clarke-Wright Algorithm with Time Windows and Traffic...");
+  const avgSpeedKmh = options.avgSpeedKmh || DEFAULT_SPEED_KMH;
+
+  console.log(`🚚 Running Clarke-Wright Algorithm (Time Windows: ${useTimeWindows}, Speed: ${avgSpeedKmh}km/h)...`);
 
   // FIX 2: Combine depot and locations to build a complete distance matrix.
   const allNodes = [depot, ...locations];
@@ -95,7 +100,7 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
       totalCapacity: loc.demand || 0,
     };
     // Calculate initial timing for feasibility
-    recomputeTimesAndDistance(route, distances, useTimeWindows);
+    recomputeTimesAndDistance(route, distances, useTimeWindows, avgSpeedKmh);
     return route;
   });
 
@@ -123,7 +128,7 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
   // Step 3: Merge Routes
   // -----------------------------------------------------------------
   const findRouteByLoc = (id) =>
-    routes.find((r) => r.stops.some((s) => toId(s.locationId) === id && s.order !== 0 && s.order !== r.stops.length -1));
+    routes.find((r) => r.stops.some((s) => toId(s.locationId) === id && s.order !== 0 && s.order !== r.stops.length - 1));
 
   for (const s of savings) {
     const rI = findRouteByLoc(toId(s.i._id));
@@ -149,12 +154,12 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
       totalCapacity: totalDemand,
     };
 
-    recomputeTimesAndDistance(mergedRoute, distances, useTimeWindows);
+    recomputeTimesAndDistance(mergedRoute, distances, useTimeWindows, avgSpeedKmh);
 
     // IMPROVEMENT: Only commit the merge if the new route is feasible.
     if (!mergedRoute.isViolated) {
-        routes = routes.filter(r => r !== rI && r !== rJ);
-        routes.push(mergedRoute);
+      routes = routes.filter(r => r !== rI && r !== rJ);
+      routes.push(mergedRoute);
     }
   }
 
@@ -173,7 +178,7 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
       });
     }
   });
-  
+
   // IMPROVEMENT: Sort routes by demand for more efficient vehicle packing.
   routes.sort((a, b) => b.totalCapacity - a.totalCapacity);
 
@@ -193,11 +198,11 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
   // Step 5: Improve with Local Search
   // -----------------------------------------------------------------
   routes.forEach((r) => {
-      if (r.stops.length > 3) { // Only run on routes with at least 2 customers
-        improveRouteWithLocalSearch(r, distances, BASE_SPEED_KMH);
-        // IMPROVEMENT: Recompute timings after stop order has changed.
-        recomputeTimesAndDistance(r, distances, useTimeWindows);
-      }
+    if (r.stops.length > 3) { // Only run on routes with at least 2 customers
+      improveRouteWithLocalSearch(r, distances, avgSpeedKmh);
+      // IMPROVEMENT: Recompute timings after stop order has changed.
+      recomputeTimesAndDistance(r, distances, useTimeWindows, avgSpeedKmh);
+    }
   });
 
   console.log("✅ Clarke-Wright with Time Windows completed.");
@@ -208,7 +213,7 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
 // =================================================================
 // TIME + DISTANCE COMPUTATION (REFACTORED FOR CORRECTNESS)
 // =================================================================
-function recomputeTimesAndDistance(route, distances, useTimeWindows) {
+function recomputeTimesAndDistance(route, distances, useTimeWindows, speedKmh) {
   let totalDist = 0;
   route.isViolated = false; // Flag to track feasibility
 
@@ -217,34 +222,34 @@ function recomputeTimesAndDistance(route, distances, useTimeWindows) {
   route.stops[0].departureTime = DEPOT_START_TIME_SECONDS;
 
   for (let i = 1; i < route.stops.length; i++) {
-    const prevStop = route.stops[i-1];
+    const prevStop = route.stops[i - 1];
     const currentStop = route.stops[i];
-    
+
     const dist = distances[toId(prevStop.locationId)][toId(currentStop.locationId)];
     totalDist += dist;
 
-    const travelTime = computeTravelTime(dist);
+    const travelTime = computeTravelTime(dist, speedKmh);
     let arrival = prevStop.departureTime + travelTime;
     let waitingTime = 0;
 
     if (useTimeWindows && currentStop.startTimeWindowSeconds != null) {
-        const startTW = currentStop.startTimeWindowSeconds;
-        const endTW = currentStop.endTimeWindowSeconds;
+      const startTW = currentStop.startTimeWindowSeconds;
+      const endTW = currentStop.endTimeWindowSeconds;
 
-        if (arrival < startTW) {
-            waitingTime = startTW - arrival;
-            arrival = startTW;
-        }
-        if (arrival > endTW) {
-            console.warn(`⚠️ Route violates window at ${currentStop.locationName}. Arrival: ${arrival.toFixed(0)}, End: ${endTW}`);
-            route.isViolated = true;
-        }
+      if (arrival < startTW) {
+        waitingTime = startTW - arrival;
+        arrival = startTW;
+      }
+      if (arrival > endTW) {
+        console.warn(`⚠️ Route violates window at ${currentStop.locationName}. Arrival: ${arrival.toFixed(0)}, End: ${endTW}`);
+        route.isViolated = true;
+      }
     }
-    
+
     // No service time for the final return to depot
     const serviceTime = (i === route.stops.length - 1) ? 0 : (currentStop.serviceTime || 0);
     const departure = arrival + serviceTime;
-    
+
     currentStop.arrivalTime = Math.round(arrival);
     currentStop.waitingTime = Math.round(waitingTime);
     currentStop.departureTime = Math.round(departure);
@@ -253,8 +258,8 @@ function recomputeTimesAndDistance(route, distances, useTimeWindows) {
   // Check final return to depot against depot's closing time
   const lastStop = route.stops[route.stops.length - 1];
   if (lastStop.arrivalTime > DEPOT_END_TIME_SECONDS) {
-      console.warn(`⚠️ Route violates depot closing time.`);
-      route.isViolated = true;
+    console.warn(`⚠️ Route violates depot closing time.`);
+    route.isViolated = true;
   }
 
   route.distance = totalDist;

@@ -10,12 +10,13 @@ const LocationSearch = ({ onLocationSelect, map }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [noResults, setNoResults] = useState(false);
   const [searchHistory, setSearchHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const searchRef = useRef(null);
   const geocoderRef = useRef(null);
 
-  // Load search history from localStorage on component mount
+  // Load search history
   useEffect(() => {
     const savedHistory = localStorage.getItem('locationSearchHistory');
     if (savedHistory) {
@@ -23,84 +24,58 @@ const LocationSearch = ({ onLocationSelect, map }) => {
     }
   }, []);
 
-  // Save search to history
   const saveToHistory = (searchTerm) => {
     const newHistory = [
       searchTerm,
       ...searchHistory.filter(item => item !== searchTerm)
-    ].slice(0, 10); // Keep only last 10 searches
-    
+    ].slice(0, 10);
     setSearchHistory(newHistory);
     localStorage.setItem('locationSearchHistory', JSON.stringify(newHistory));
   };
 
+  // Leaflet Geocoder Control (Optional)
   useEffect(() => {
     if (map && !geocoderRef.current) {
-      // Initialize the geocoder control
       geocoderRef.current = L.Control.geocoder({
         defaultMarkGeocode: false,
-        placeholder: 'Search for a location...',
-        errorMessage: 'Nothing found.',
-        suggestMinLength: 3,
-        suggestTimeout: 250,
-        queryMinLength: 1
-      }).on('markgeocode', function(e) {
-        const { center, name, bbox } = e.geocode;
-        
-        // Create a location object with the geocoded data
-        const location = {
-          name: name,
-          address: name,
-          latitude: center.lat,
-          longitude: center.lng,
-          bbox: bbox
-        };
-        
-        // Call the callback with the selected location
-        onLocationSelect(location);
-        
-        // Clear the search results
-        setSearchResults([]);
-        setSearchTerm('');
-        
-        // Fly to the location
-        map.fitBounds(bbox);
-      });
-      
-      // Add the geocoder to the map
-      geocoderRef.current.addTo(map);
+        placeholder: 'Search...',
+      }).on('markgeocode', function (e) {/* No-op */ });
     }
-    
-    return () => {
-      if (map && geocoderRef.current) {
-        geocoderRef.current.remove();
-        geocoderRef.current = null;
-      }
-    };
-  }, [map, onLocationSelect]);
+  }, [map]);
 
-  // Manual search function as a backup
+  // Debounced Auto-Search
+  useEffect(() => {
+    setNoResults(false);
+    if (!searchTerm.trim() || searchTerm.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    const timerId = setTimeout(() => {
+      handleSearch();
+    }, 500);
+    return () => clearTimeout(timerId);
+  }, [searchTerm]);
+
   const handleSearch = async () => {
     if (!searchTerm.trim()) return;
-    
+
     setIsLoading(true);
     setError(null);
-    
+    setNoResults(false);
+
     try {
-      // Using Nominatim API for geocoding (free and open-source)
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchTerm)}&limit=5`
       );
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch location data');
-      }
-      
+
+      if (!response.ok) throw new Error('Failed to fetch');
+
       const data = await response.json();
       setSearchResults(data);
+      setNoResults(data.length === 0);
     } catch (err) {
-      setError('Error searching for location. Please try again.');
       console.error(err);
+      setError('Connection error. Retrying...');
     } finally {
       setIsLoading(false);
     }
@@ -113,16 +88,13 @@ const LocationSearch = ({ onLocationSelect, map }) => {
       latitude: parseFloat(result.lat),
       longitude: parseFloat(result.lon)
     };
-    
-    // Save search term to history
     saveToHistory(searchTerm);
-    
     onLocationSelect(location);
     setSearchResults([]);
     setSearchTerm('');
     setShowHistory(false);
-    
-    // Fly to the location
+    setNoResults(false);
+
     if (map) {
       map.setView([location.latitude, location.longitude], 15);
     }
@@ -131,12 +103,18 @@ const LocationSearch = ({ onLocationSelect, map }) => {
   const handleHistorySelect = (historyItem) => {
     setSearchTerm(historyItem);
     setShowHistory(false);
-    handleSearch();
   };
 
   const clearHistory = () => {
     setSearchHistory([]);
     localStorage.removeItem('locationSearchHistory');
+  };
+
+  const handleClear = () => {
+    setSearchTerm('');
+    setSearchResults([]);
+    setNoResults(false);
+    setShowHistory(true);
   };
 
   return (
@@ -147,34 +125,46 @@ const LocationSearch = ({ onLocationSelect, map }) => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           onFocus={() => setShowHistory(true)}
+          // Delay blur to allow click on results
           onBlur={() => setTimeout(() => setShowHistory(false), 200)}
-          placeholder="Search for a location..."
+          placeholder="Search place (e.g. Indore Zoo)..."
           className="search-input"
         />
-        <button 
+
+        {searchTerm && (
+          <button
+            onClick={handleClear}
+            className="px-3 text-slate-400 hover:text-red-500 font-bold"
+            type="button"
+          >
+            ✕
+          </button>
+        )}
+
+        <button
           onClick={handleSearch}
           disabled={isLoading || !searchTerm.trim()}
           className="search-button"
+          type="button"
         >
-          {isLoading ? '🔍' : '🔍'}
+          {isLoading ? <span className="animate-spin inline-block">↻</span> : '🔍'}
         </button>
       </div>
 
+      {/* Debug/Status Feedback */}
+      <div className="bg-white/90 backdrop-blur px-3 py-1 rounded-b-lg text-xs text-black font-medium border-x border-b border-slate-200">
+        {isLoading ? 'Searching...' : searchResults.length > 0 ? `${searchResults.length} results (Click to select)` : noResults ? 'No results found' : 'Type to search'}
+      </div>
+
       {/* Search History */}
-      {showHistory && searchHistory.length > 0 && (
+      {showHistory && searchHistory.length > 0 && !noResults && searchResults.length === 0 && (
         <div className="search-history">
           <div className="history-header">
-            <span>Recent Searches</span>
-            <button onClick={clearHistory} className="clear-history-btn">
-              Clear
-            </button>
+            <span>Recent</span>
+            <button onMouseDown={clearHistory} className="clear-history-btn">Clear</button>
           </div>
           {searchHistory.map((item, index) => (
-            <div
-              key={index}
-              className="history-item"
-              onClick={() => handleHistorySelect(item)}
-            >
+            <div key={index} className="history-item" onMouseDown={() => handleHistorySelect(item)}>
               <span className="history-icon">🕒</span>
               <span className="history-text">{item}</span>
             </div>
@@ -184,24 +174,34 @@ const LocationSearch = ({ onLocationSelect, map }) => {
 
       {/* Search Results */}
       {searchResults.length > 0 && (
-        <div className="search-results">
+        <div className="search-results" style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          backgroundColor: 'white',
+          zIndex: 9999,
+          color: 'black',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          maxHeight: '300px',
+          overflowY: 'auto'
+        }}>
           {searchResults.map((result, index) => (
             <div
               key={index}
-              className="search-result-item"
-              onClick={() => handleLocationSelect(result)}
+              className="search-result-item hover:bg-slate-50 border-b border-slate-100 p-3 cursor-pointer"
+              onMouseDown={() => handleLocationSelect(result)}
             >
-              <div className="result-name">{result.display_name.split(',')[0]}</div>
-              <div className="result-address">{result.display_name}</div>
+              <div className="result-name font-bold text-slate-800">{result.display_name.split(',')[0]}</div>
+              <div className="result-address text-xs text-slate-500">{result.display_name}</div>
             </div>
           ))}
         </div>
       )}
 
       {error && (
-        <div className="search-error">
-          {error}
-        </div>
+        <div className="search-error">{error}</div>
       )}
     </div>
   );

@@ -50,8 +50,8 @@ const RouteTimeline = ({ route }) => {
           if (isDepotStart) label = 'Departure';
           if (isDepotEnd) label = 'Return';
 
-          // Backend provides timeWindowEnd in MINUTES, convert to SECONDS
-          const isLate = stop.timeWindowEnd !== null && stop.arrivalTime > stop.timeWindowEnd * 60;
+          // Backend provides timeWindowEnd in SECONDS
+          const isLate = stop.timeWindowEnd !== null && stop.arrivalTime > stop.timeWindowEnd;
 
           return (
             <div key={index} className="relative pl-6">
@@ -112,11 +112,11 @@ const RouteTimeline = ({ route }) => {
                     </>
                   )}
 
-                  {!isDepotStart && !isDepotEnd && stop.timeWindowStart !== null && (
+                  {!isDepotStart && !isDepotEnd && stop.timeWindowStart != null && stop.timeWindowEnd != null && (
                     <div className="col-span-2 md:col-span-1">
                       <span className="text-xs text-slate-400 block uppercase">Window</span>
                       <span className="font-mono text-xs">
-                        {formatTime(stop.timeWindowStart * 60)} - {formatTime(stop.timeWindowEnd * 60)}
+                        {formatTime(stop.timeWindowStart)} - {formatTime(stop.timeWindowEnd)}
                       </span>
                     </div>
                   )}
@@ -369,6 +369,11 @@ const OptimizationDetail = () => {
                   <div className="text-xl font-bold text-slate-800 dark:text-slate-200">{avgDistance.toFixed(1)} km</div>
                 </div>
                 <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                  <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Est. Cost</div>
+                  <div className="text-xl font-bold text-green-700 dark:text-green-400">₹{optimization.totalCost || 0}</div>
+                  <div className="text-xs text-slate-400">Fuel + Driver</div>
+                </div>
+                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
                   <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Status</div>
                   <div className="text-xl font-bold text-blue-600 dark:text-blue-400">Optimized</div>
                 </div>
@@ -440,9 +445,14 @@ const OptimizationDetail = () => {
                     <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                       <div className={`p-4 border-l-4 ${colorClass} bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center`}>
                         <h3 className="font-bold text-slate-800 dark:text-white">Route {index + 1} - {displayVehicleName}</h3>
-                        <span className="text-xs font-mono bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300">
-                          {Number(route.distance).toFixed(1)} km
-                        </span>
+                        <div className="text-right">
+                          <span className="text-xs font-mono bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 block mb-1">
+                            {Number(route.distance).toFixed(1)} km
+                          </span>
+                          {route.cost !== undefined && (
+                            <span className="text-xs font-bold text-green-600 block">₹{route.cost}</span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Driver Assignment Section */}
@@ -506,6 +516,10 @@ const OptimizationDetail = () => {
                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                       <td className="p-4 font-medium text-slate-500">Total Routes</td>
                       <td className="p-4 text-slate-800 dark:text-slate-200">{optimization.routes.length}</td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                      <td className="p-4 font-medium text-slate-500">Average Speed Used</td>
+                      <td className="p-4 text-slate-800 dark:text-slate-200">{optimization.avgSpeedKmh || 25} km/h</td>
                     </tr>
                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                       <td className="p-4 font-medium text-slate-500">Total Distance</td>

@@ -15,6 +15,12 @@ const get = async (id) => {
   return response.data;
 };
 
+// NEW: Public access for QR codes
+const getPublic = async (id) => {
+  const response = await api.get(`/optimization/${id}/public`);
+  return response.data;
+};
+
 const create = async (data) => {
   const response = await api.post('/optimization', data);
   return response.data;
@@ -38,6 +44,7 @@ const assignDriver = async (id, routeIndex, driverId) => {
 const OptimizationService = {
   getAll,
   get,
+  getPublic,
   create,
   remove,
   getRoutedPolyline,

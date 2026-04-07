@@ -6,8 +6,8 @@ import { useToast } from '../components/ToastProvider';
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    email: '1234qwer@gmail.com',
-    password: '123123'
+    email: '',
+    password: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

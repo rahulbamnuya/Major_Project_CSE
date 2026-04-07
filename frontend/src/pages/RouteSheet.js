@@ -138,9 +138,9 @@ const RouteSheet = () => {
                   </div>
                   <div className="flex flex-col items-center">
                     <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                      <QRCode value={generateGoogleMapsUrl(route.stops)} size={90} />
+                      <QRCode value={`${window.location.origin}/driver/view/${optimization._id}/${idx}`} size={90} />
                     </div>
-                    <span className="text-[10px] font-mono mt-1 text-slate-500 uppercase tracking-widest">Scan for Nav</span>
+                    <span className="text-[10px] font-mono mt-1 text-slate-500 uppercase tracking-widest">Scan for App</span>
                   </div>
                 </div>
 

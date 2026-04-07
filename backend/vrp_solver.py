@@ -50,7 +50,9 @@ def solve_cvrp_without_restrictions(
     traffic_factor: float = 1.25
 ) -> List[Dict[str, Any]]:
     n_locations, n_vehicles, depot_index = len(distance_matrix), len(vehicles), 0
-    speed_m_per_s = avg_speed_kmh * 1000 / 3600
+    speed_m_per_s = (avg_speed_kmh * 1000) / 3600
+    logging.info(f"Solving CVRP (No Restrictions). Speed: {avg_speed_kmh} km/h ({speed_m_per_s:.2f} m/s). Traffic: {traffic_factor}")
+
     manager = pywrapcp.RoutingIndexManager(n_locations, n_vehicles, depot_index)
     routing = pywrapcp.RoutingModel(manager)
     def distance_callback(from_idx, to_idx): return distance_matrix[manager.IndexToNode(from_idx)][manager.IndexToNode(to_idx)]
@@ -61,7 +63,14 @@ def solve_cvrp_without_restrictions(
     routing.AddDimensionWithVehicleCapacity(demand_callback_idx, 0, [v["capacity"] for v in vehicles], True, "Capacity")
     def time_callback(from_idx, to_idx):
         from_node, to_node = manager.IndexToNode(from_idx), manager.IndexToNode(to_idx)
-        travel_time = int((distance_matrix[from_node][to_node] / speed_m_per_s) * traffic_factor)
+        dist = distance_matrix[from_node][to_node]
+        if dist > 0:
+            val = (dist / speed_m_per_s) * traffic_factor
+            travel_time = int(val + 0.5)
+            if travel_time == 0: travel_time = 1
+        else:
+            travel_time = 0
+            
         service_time = service_times_seconds[from_node]
         return travel_time + service_time
     time_callback_idx = routing.RegisterTransitCallback(time_callback)
@@ -116,7 +125,15 @@ def solve_cvrp_with_time_windows(
     routing = pywrapcp.RoutingModel(manager)
     def time_callback(from_idx, to_idx):
         from_node, to_node = manager.IndexToNode(from_idx), manager.IndexToNode(to_idx)
-        travel_time = int((distance_matrix[from_node][to_node] / speed_m_per_s) * traffic_factor)
+        dist = distance_matrix[from_node][to_node]
+        if dist > 0:
+            val = (dist / speed_m_per_s) * traffic_factor
+            travel_time = int(val + 0.5) # Round to nearest second
+            if travel_time == 0: travel_time = 1 # Force at least 1s if moving
+        else:
+            travel_time = 0
+            
+        # logging.debug(f"Time {from_node}->{to_node}: Dist={dist}m, Time={travel_time}s")
         service_time = service_times_seconds[from_node]
         return travel_time + service_time
     time_callback_idx = routing.RegisterTransitCallback(time_callback)

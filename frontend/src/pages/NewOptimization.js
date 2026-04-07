@@ -87,6 +87,7 @@ const NewOptimization = () => {
   const [algorithm, setAlgorithm] = useState('clarke-wright');
   const [runComparison, setRunComparison] = useState(false);
   const [useTimeWindows, setUseTimeWindows] = useState(true);
+  const [avgSpeedKmh, setAvgSpeedKmh] = useState(25); // Average speed in km/h
 
   // Execution State
   const [optimizing, setOptimizing] = useState(false);
@@ -194,7 +195,8 @@ const NewOptimization = () => {
         locationIds: selectedLocations,
         algorithm,
         runComparison,
-        useTimeWindows
+        useTimeWindows,
+        avgSpeedKmh // Send average speed to backend
       };
 
       const response = await OptimizationService.create(payload);
@@ -423,6 +425,35 @@ const NewOptimization = () => {
             </div>
             <div className={`w-12 h-6 rounded-full p-1 transition-colors ${useTimeWindows ? 'bg-blue-500' : 'bg-slate-300'}`}>
               <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${useTimeWindows ? 'translate-x-6' : 'translate-x-0'}`}></div>
+            </div>
+          </div>
+
+          {/* Average Speed Configuration */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-full flex items-center justify-center">
+                  <FaTruck />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm">Average Vehicle Speed</h4>
+                  <p className="text-xs text-slate-500">Adjust based on traffic conditions</p>
+                </div>
+              </div>
+              <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{avgSpeedKmh} km/h</span>
+            </div>
+            <input
+              type="range"
+              min="15"
+              max="60"
+              step="5"
+              value={avgSpeedKmh}
+              onChange={(e) => setAvgSpeedKmh(Number(e.target.value))}
+              className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+            />
+            <div className="flex justify-between text-xs text-slate-400 mt-1">
+              <span>15 km/h (Heavy Traffic)</span>
+              <span>60 km/h (Highway)</span>
             </div>
           </div>
 

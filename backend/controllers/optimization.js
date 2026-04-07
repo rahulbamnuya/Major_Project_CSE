@@ -59,6 +59,30 @@ exports.getOptimizationById = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/optimizations/:id/public
+ * Get a single optimization by its ID (Public Access for QR Code).
+ */
+exports.getOptimizationPublic = async (req, res) => {
+  try {
+    const optimization = await Optimization.findById(req.params.id)
+      .populate('vehicles')
+      .populate('locations');
+
+    if (!optimization) {
+      return res.status(404).json({ msg: 'Optimization not found' });
+    }
+
+    res.json(optimization);
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Optimization not found' });
+    }
+    res.status(500).send('Server error');
+  }
+};
+
 
 /**
  * POST /api/optimizations
@@ -134,7 +158,7 @@ exports.getOptimizationById = async (req, res) => {
 // };
 
 exports.createOptimization = async (req, res) => {
-  const { name, vehicleIds, locationIds, algorithm, runComparison = false } = req.body;
+  const { name, vehicleIds, locationIds, algorithm, runComparison = false, avgSpeedKmh = 25 } = req.body;
 
   // Coerce useTimeWindows into a strict boolean
   let useTimeWindows = req.body.useTimeWindows;
@@ -144,7 +168,7 @@ exports.createOptimization = async (req, res) => {
     useTimeWindows = !!useTimeWindows;
   }
 
-  console.log(`Starting optimization creation for '${name}'. Comparison mode: ${runComparison}, Use Time Windows: ${useTimeWindows}`);
+  console.log(`Starting optimization creation for '${name}'. Comparison mode: ${runComparison}, Use Time Windows: ${useTimeWindows}, Avg Speed: ${avgSpeedKmh} km/h`);
 
   try {
     // 1. Fetch all required data from DB
@@ -199,7 +223,8 @@ exports.createOptimization = async (req, res) => {
       locations, // Non-depot locations
       depot,
       algorithmMap,
-      useTimeWindows
+      useTimeWindows,
+      avgSpeedKmh // Pass average speed to algorithms
     };
 
     // 4. Run comparison or single algorithm
@@ -228,13 +253,13 @@ exports.createOptimization = async (req, res) => {
  * Enhanced algorithm comparison runner that adds richer metrics.
  */
 async function runAlgorithmComparison(req, res, context) {
-  const { name, user, vehicleIds, locationIds, vehicles, locations, depot, algorithmMap, useTimeWindows } = context;
+  const { name, user, vehicleIds, locationIds, vehicles, locations, depot, algorithmMap, useTimeWindows, avgSpeedKmh } = context;
   const allAlgorithmResults = [];
 
   console.log('--- STARTING ALGORITHM COMPARISON RUN ---');
   console.log(`Depot: ${depot.name}, Locations: ${locations.length}, Vehicles: ${vehicles.length}`);
 
-  const algorithmOptions = { useTimeWindows };
+  const algorithmOptions = { useTimeWindows, avgSpeedKmh };
 
   for (const [key, algo] of Object.entries(algorithmMap)) {
     console.log(`\n[Comparison] Running -> ${algo.name}...`);
@@ -288,6 +313,8 @@ async function runAlgorithmComparison(req, res, context) {
     routes: bestResult.routes,
     totalDistance: bestResult.totalDistance,
     totalDuration: bestResult.totalDuration,
+    totalCost: bestResult.totalCost, // Save total cost
+    avgSpeedKmh // Save the speed used
   });
 
   const optimization = await newOptimization.save();
@@ -303,6 +330,7 @@ async function runAlgorithmComparison(req, res, context) {
       algorithm: a.algorithm,
       totalDistance: a.totalDistance,
       totalDuration: a.totalDuration,
+      totalCost: a.totalCost, // Add cost to metrics
       avgDeliveryTime: a.avgDeliveryTimeMinutes,
       coverage: a.coveragePercentage,
       utilization: a.vehicleUtilization,
@@ -317,9 +345,9 @@ async function runAlgorithmComparison(req, res, context) {
  * Orchestrates a single algorithm run.
  */
 async function runSingleAlgorithm(req, res, context) {
-  const { name, user, vehicleIds, locationIds, algorithm, vehicles, locations, depot, algorithmMap, useTimeWindows } = context;
+  const { name, user, vehicleIds, locationIds, algorithm, vehicles, locations, depot, algorithmMap, useTimeWindows, avgSpeedKmh } = context;
   const selectedAlgo = algorithmMap[algorithm] || algorithmMap['clarke-wright'];
-  const algorithmOptions = { useTimeWindows };
+  const algorithmOptions = { useTimeWindows, avgSpeedKmh };
 
   console.log(`--- STARTING SINGLE ALGORITHM RUN: ${selectedAlgo.name} ---`);
 
@@ -354,6 +382,8 @@ async function runSingleAlgorithm(req, res, context) {
       routes: routesWithVehicles,
       totalDistance: metrics.totalDistance,
       totalDuration: metrics.totalDuration,
+      totalCost: metrics.totalCost, // Save total cost
+      avgSpeedKmh // Save the speed used
     });
 
     const optimization = await newOptimization.save();
@@ -598,34 +628,55 @@ exports.updateStopStatus = async (req, res) => {
 /**
  * Calculates key performance metrics for a set of routes.
  */
-// function calculateRouteMetrics(routes, locations, vehicles, depotId) {
-//   let totalDistance = 0, totalDuration = 0, totalDemandServed = 0;
-//   const servedLocationIds = new Set();
+/**
+ * Calculates key performance metrics for a set of routes.
+ */
+function calculateRouteMetrics(routes, locations, vehicles, depotId) {
+  let totalDistance = 0, totalDuration = 0, totalDemandServed = 0, totalCost = 0;
+  const servedLocationIds = new Set();
 
-//   routes.forEach(route => {
-//     totalDistance += route.distance || 0;
-//     totalDuration += route.duration || 0;
-//     totalDemandServed += route.totalCapacity || 0;
-//     route.stops.forEach(stop => {
-//       if (stop.locationId && stop.locationId.toString() !== depotId.toString()) {
-//         servedLocationIds.add(stop.locationId.toString());
-//       }
-//     });
-//   });
+  routes.forEach(route => {
+    totalDistance += route.distance || 0;
+    totalDuration += route.duration || 0;
+    totalDemandServed += route.totalCapacity || 0;
 
-//   const totalLocations = locations.filter(l => !l.isDepot).length;
-//   const totalVehicleCapacity = vehicles.reduce((sum, v) => sum + ((v.capacity || 0) * (v.count || 1)), 0);
+    // --- COST CALCULATION ---
+    let cost = 0;
+    if (route.vehicle) {
+      const v = vehicles.find(veh => veh._id.toString() === route.vehicle.toString());
+      if (v) {
+        // Use vehicle-specific rates or defaults
+        const fuelRate = v.fuel_cost_per_km !== undefined ? v.fuel_cost_per_km : 10;
+        const driverRate = v.driver_cost_per_km !== undefined ? v.driver_cost_per_km : 8;
 
-//   return {
-//     totalDistance,
-//     totalDuration,
-//     totalDemandServed,
-//     totalLocationsServed: servedLocationIds.size,
-//     coveragePercentage: totalLocations > 0 ? (servedLocationIds.size / totalLocations) * 100 : 0,
-//     vehicleUtilization: totalVehicleCapacity > 0 ? (totalDemandServed / totalVehicleCapacity) * 100 : 0,
-//     routesCount: routes.length,
-//   };
-// }
+        // Cost = Distance * (Fuel + Driver)
+        cost = (route.distance || 0) * (fuelRate + driverRate);
+      }
+    }
+    route.cost = Math.round(cost); // Store on route (rounded)
+    totalCost += cost;
+
+    route.stops.forEach(stop => {
+      if (stop.locationId && stop.locationId.toString() !== depotId.toString()) {
+        servedLocationIds.add(stop.locationId.toString());
+      }
+    });
+  });
+
+  const totalLocations = locations.filter(l => !l.isDepot).length;
+  const totalVehicleCapacity = vehicles.reduce((sum, v) => sum + ((v.capacity || 0) * (v.count || 1)), 0);
+
+  return {
+    totalDistance,
+    totalDuration,
+    totalCost: Math.round(totalCost), // Return total cost
+    totalDemandServed,
+    totalLocationsServed: servedLocationIds.size,
+    coveragePercentage: totalLocations > 0 ? (servedLocationIds.size / totalLocations) * 100 : 0,
+    vehicleUtilization: totalVehicleCapacity > 0 ? (totalDemandServed / totalVehicleCapacity) * 100 : 0,
+    routesCount: routes.length,
+  };
+}
 
 /**
  * Selects the best algorithm result based on coverage and then distance.

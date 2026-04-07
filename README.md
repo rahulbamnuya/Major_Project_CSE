@@ -7,8 +7,8 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-orange.svg)](https://mongodb.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-
-LIVE LINK : https://complexrouteoptimizer.netlify.app/
+LIVE LINK1 : https://logistics-master.vercel .app/
+LIVE LINK2 : https://complexrouteoptimizer.netlify.app/
 
 
 ## 📖 **Overview**

@@ -45,7 +45,8 @@ const RouteSchema = new mongoose.Schema({
     type: [[Number]],
     default: undefined
   },
-  driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver' }
+  driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver' },
+  cost: Number // Total cost for this route
 }, { _id: false });
 
 // ... (AlgorithmResultSchema and OptimizationSchema remain structurally the same but will now use the corrected RouteSchema)
@@ -56,6 +57,7 @@ const AlgorithmResultSchema = new mongoose.Schema({
   routes: [RouteSchema],
   totalDistance: Number,
   totalDuration: Number,
+  totalCost: Number, // Total cost for this result
   executionTime: Number,
   error: String,
 });
@@ -70,6 +72,8 @@ const OptimizationSchema = new mongoose.mongoose.Schema({
   routes: [RouteSchema],
   totalDistance: Number,
   totalDuration: Number,
+  totalCost: Number, // Sum of all route costs
+  avgSpeedKmh: { type: Number, default: 25 },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Optimization', OptimizationSchema);

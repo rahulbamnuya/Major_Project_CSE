@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "dev": "concurrently \"npm run server\" \"npm run python\" --names \"NODE,PYTHON\" -c \"blue,yellow\"",
     "server": "nodemon server.js",
+    "python": "venv\\Scripts\\python -m uvicorn main:app --reload --port 8000",
     "setup": "node setup-env.js"
   },
   "keywords": [
@@ -35,6 +37,7 @@
     "@google/ortools": "^9.5.0"
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
     "nodemon": "^3.1.10"
   }
 }

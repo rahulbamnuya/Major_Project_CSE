@@ -6,7 +6,7 @@ const { calculateDistance } = require('../utils/optimizationUtils');
 // =================================================================
 const BASE_SERVICE_TIME_SECONDS = 3 * 60; // 3 minutes
 const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60; // 10 units per minute
-const AVERAGE_SPEED_KMH = 40;
+const DEFAULT_SPEED_KMH = 40;
 const TRAFFIC_FACTOR = 1.25;
 const DEPOT_START_TIME_SECONDS = 6 * 3600; // 6:00 AM
 const DEPOT_END_TIME_SECONDS = 18 * 3600; // 6:00 PM
@@ -19,8 +19,15 @@ const toId = (id) => id.toString();
 // =================================================================
 // MAIN: Nearest Neighbor Algorithm with Time Windows
 // =================================================================
+// =================================================================
+// MAIN: Nearest Neighbor Algorithm with Time Windows
+// =================================================================
 exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) => {
     const useTimeWindows = options.useTimeWindows || false;
+    const speedKmh = options.avgSpeedKmh || DEFAULT_SPEED_KMH;
+
+    console.log(`🚚 Running Nearest Neighbor (Time Windows: ${useTimeWindows}, Speed: ${speedKmh}km/h)...`);
+
     const depotId = toId(depot._id);
     const pending = locations.filter((l) => toId(l._id) !== depotId);
 
@@ -37,6 +44,12 @@ exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) =>
     const used = new Set();
 
     const dist = (a, b) => calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+
+    // HELPER: Compute travel time in seconds
+    const computeTravelTime = (distanceKm) => {
+        // (Distance in km / Speed in km/h) * 3600 seconds/hour * Traffic
+        return ((distanceKm / speedKmh) * 3600) * TRAFFIC_FACTOR;
+    };
 
     for (const vs of vehicleSlots) {
         let remainingCapacity = vs.capacity;
@@ -67,13 +80,13 @@ exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) =>
                 if ((loc.demand || 0) > remainingCapacity) continue;
 
                 const travelDistance = dist(currentLocation, loc);
-                const travelTime = ((travelDistance / AVERAGE_SPEED_KMH) * 3600) * TRAFFIC_FACTOR;
+                const travelTime = computeTravelTime(travelDistance);
                 let arrivalTime = currentTime + travelTime;
 
                 // Time window check
                 if (useTimeWindows) {
-                    const startTW = loc.startTimeWindowSeconds || 0;
-                    const endTW = loc.endTimeWindowSeconds || DEPOT_END_TIME_SECONDS;
+                    const startTW = loc.timeWindow ? loc.timeWindow[0] * 60 : 0;
+                    const endTW = loc.timeWindow ? loc.timeWindow[1] * 60 : DEPOT_END_TIME_SECONDS;
                     if (arrivalTime > endTW) continue; // skip if after window
                     arrivalTime = Math.max(arrivalTime, startTW);
                 }
@@ -90,12 +103,17 @@ exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) =>
             const serviceTime = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
 
             // Arrival / Service / Departure time
-            let arrivalTime = currentTime + ((bestDistance / AVERAGE_SPEED_KMH) * 3600) * TRAFFIC_FACTOR;
+            const travelDistBest = dist(currentLocation, best);
+            const travelTimeBest = computeTravelTime(travelDistBest);
+
+            let arrivalTime = currentTime + travelTimeBest;
             let waitTime = 0;
             if (useTimeWindows) {
-                const startTW = best.startTimeWindowSeconds || 0;
-                waitTime = Math.max(0, startTW - arrivalTime);
-                arrivalTime += waitTime;
+                const startTW = best.timeWindow ? best.timeWindow[0] * 60 : 0;
+                if (arrivalTime < startTW) {
+                    waitTime = startTW - arrivalTime;
+                    arrivalTime = startTW;
+                }
             }
             const departureTime = arrivalTime + serviceTime;
 
@@ -107,10 +125,10 @@ exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) =>
                 demand,
                 order: order++,
                 arrivalTime: Math.round(arrivalTime),
-                serviceTime: Math.round(serviceTime + waitTime),
+                serviceTime: Math.round(serviceTime),
                 departureTime: Math.round(departureTime),
-                startTimeWindowSeconds: best.startTimeWindowSeconds,
-                endTimeWindowSeconds: best.endTimeWindowSeconds,
+                startTimeWindowSeconds: best.timeWindow ? best.timeWindow[0] * 60 : null,
+                endTimeWindowSeconds: best.timeWindow ? best.timeWindow[1] * 60 : null,
             });
 
             remainingCapacity -= demand;
@@ -122,7 +140,7 @@ exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) =>
         // Close route back to depot
         if (stops.length > 1) {
             const travelDistanceToDepot = dist(currentLocation, depot);
-            const travelTimeToDepot = ((travelDistanceToDepot / AVERAGE_SPEED_KMH) * 3600) * TRAFFIC_FACTOR;
+            const travelTimeToDepot = computeTravelTime(travelDistanceToDepot);
             const arrivalTimeDepot = currentTime + travelTimeToDepot;
 
             stops.push({

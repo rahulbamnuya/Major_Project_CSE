@@ -338,17 +338,17 @@ const LocationForm = () => {
 
           {/* Map Section */}
           <div className="lg:col-span-2 order-1 lg:order-2 space-y-4">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-2 shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden relative group">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl p-2 shadow-xl border border-slate-100 dark:border-slate-700 relative group">
 
               {/* Search Overlay */}
-              <div className="absolute top-6 left-6 right-6 z-[400]">
+              <div className="absolute top-6 left-6 right-6 z-[2000]">
                 {!showSearch ? (
                   <button onClick={() => setShowSearch(true)} className="w-full bg-white dark:bg-slate-900/90 backdrop-blur text-left px-4 py-3 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:ring-2 hover:ring-blue-400 transition-all flex items-center gap-3">
                     <FaSearch className="text-slate-400" />
                     <span>Search for a place...</span>
                   </button>
                 ) : (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 animation-fade-in-down">
+                  <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 animation-fade-in-down">
                     <div className="p-2 flex justify-between items-center border-b border-slate-100 dark:border-slate-800">
                       <span className="text-xs font-bold uppercase text-slate-400 pl-2">Location Search</span>
                       <button onClick={() => setShowSearch(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500">✕</button>
