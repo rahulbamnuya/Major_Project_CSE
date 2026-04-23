@@ -1,0 +1,68 @@
+{
+    "active_routes": [
+        {
+            "Vehicle ID": "Eicher_1_Trip1",
+            "Route Indices": [
+                0,
+                3,
+                4,
+                7,
+                5,
+                0
+            ],
+            "Load Carried": 5000,
+            "Distance (km)": 21.67,
+            "Duration (seconds)": 12817,
+            "Arrival Times (seconds)": [
+                21600,
+                28800,
+                29875,
+                30838,
+                31637,
+                34417
+            ],
+            "Service Times (seconds)": [
+                0,
+                600,
+                600,
+                600,
+                1800,
+                0
+            ]
+        },
+        {
+            "Vehicle ID": "Eicher_1_Trip2",
+            "Route Indices": [
+                0,
+                2,
+                9,
+                1,
+                8,
+                6,
+                0
+            ],
+            "Load Carried": 1480,
+            "Distance (km)": 15.68,
+            "Duration (seconds)": 4765,
+            "Arrival Times (seconds)": [
+                35317,
+                35360,
+                36125,
+                37226,
+                38022,
+                39239,
+                40082
+            ],
+            "Service Times (seconds)": [
+                0,
+                600,
+                600,
+                600,
+                600,
+                600,
+                0
+            ]
+        }
+    ],
+    "dropped_nodes": []
+}

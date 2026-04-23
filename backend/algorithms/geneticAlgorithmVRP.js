@@ -222,7 +222,7 @@ const TRAFFIC_FACTOR = 1.25;
 const BASE_SERVICE_TIME_SECONDS = 3 * 60; // 3 minutes
 const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60; // 10 units per minute
 const DEPOT_START_TIME_SECONDS = 360 * 60; // 6:00 AM
-const DEPOT_END_TIME_SECONDS = 1080 * 60;  // 6:00 PM
+const DEPOT_END_TIME_SECONDS = 22 * 3600;  // 10:00 PM (Upgraded for Multi-Trip)
 
 // =================================================================
 // HELPER: ObjectId to string
@@ -288,7 +288,22 @@ function createRandomSolution(vehicles, locations, depot, distances, useTimeWind
     );
 
     for (const loc of shuffledLocations) {
-        const slot = vehicleSlots.find(s => (s.usedCapacity + (loc.demand || 0)) <= s.capacity);
+        const slot = vehicleSlots.find(s => {
+            // Capacity Check
+            if ((s.usedCapacity + (loc.demand || 0)) > s.capacity) return false;
+
+            // INFRASTRUCTURE CHECK
+            const rt = (loc.road_type || 'STANDARD').toUpperCase();
+            const vt = (s.vehicle.vehicle_type || 'LARGE').toUpperCase();
+            
+            // RULE 1: NARROW -> Only SMALL
+            if (rt === 'NARROW' && vt !== 'SMALL') return false;
+            
+            // RULE 2: STANDARD -> No LARGE
+            if (rt === 'STANDARD' && vt === 'LARGE') return false;
+
+            return true;
+        });
         if (slot) {
             slot.locations.push(loc);
             slot.usedCapacity += loc.demand || 0;
@@ -311,7 +326,8 @@ function createRandomSolution(vehicles, locations, depot, distances, useTimeWind
                 arrivalTime: 0,
                 serviceTime: 0,
                 startTimeWindowSeconds: loc.startTimeWindowSeconds,
-                endTimeWindowSeconds: loc.endTimeWindowSeconds
+                endTimeWindowSeconds: loc.endTimeWindowSeconds,
+                road_type: loc.road_type || 'STANDARD'
             })),
             { locationId: depot._id, locationName: depot.name, latitude: depot.latitude, longitude: depot.longitude, demand: 0, order: slot.locations.length + 1, arrivalTime: 0, serviceTime: 0 }
         ];

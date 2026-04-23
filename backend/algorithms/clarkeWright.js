@@ -10,7 +10,7 @@ const { improveRouteWithLocalSearch } = require('./localSearch');
 const DEFAULT_SPEED_KMH = 40; // Fallback if not provided
 const TRAFFIC_FACTOR = 1.25;
 const DEPOT_START_TIME_SECONDS = 6 * 3600; // 6:00 AM
-const DEPOT_END_TIME_SECONDS = 18 * 3600; // 6:00 PM
+const DEPOT_END_TIME_SECONDS = 22 * 3600; // 10:00 PM (increased for multi-trip)
 const BASE_SERVICE_TIME_SECONDS = 3 * 60; // 3 minutes
 const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60; // 10 units per minute
 
@@ -88,6 +88,7 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
         demand: loc.demand || 0,
         order: 1,
         serviceTime,
+        road_type: loc.road_type || 'STANDARD',
         ...locTimeWindow,
       },
       makeDepotStop(2),
@@ -104,8 +105,8 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
     return route;
   });
 
-  // IMPROVEMENT: Filter out any initially infeasible routes.
-  routes = routes.filter(r => !r.isViolated);
+  // IMPROVEMENT: NO FILTERING. We want to see all deliveries, even late ones.
+  // routes = routes.filter(r => !r.isViolated);
 
   // -----------------------------------------------------------------
   // Step 2: Compute Savings
@@ -125,8 +126,17 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
   savings.sort((a, b) => b.saving - a.saving);
 
   // -----------------------------------------------------------------
-  // Step 3: Merge Routes
+  // Step 3: Merge Routes (WITH INFRASTRUCTURE CAPACITY CHECKS)
   // -----------------------------------------------------------------
+  
+  // Calculate max possible capacity for each infrastructure tier
+  const getVehType = (v) => (v.vehicle_type || '').toUpperCase();
+  const maxCap = {
+    NARROW: Math.max(0, ...vehicles.filter(v => getVehType(v) === 'SMALL').map(v => v.capacity || 0)),
+    STANDARD: Math.max(0, ...vehicles.filter(v => ['SMALL', 'MEDIUM'].includes(getVehType(v))).map(v => v.capacity || 0)),
+    WIDE: Math.max(0, ...vehicles.map(v => v.capacity || 0))
+  };
+
   const findRouteByLoc = (id) =>
     routes.find((r) => r.stops.some((s) => toId(s.locationId) === id && s.order !== 0 && s.order !== r.stops.length - 1));
 
@@ -139,59 +149,49 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
     const jIsStart = toId(rJ.stops[1].locationId) === toId(s.j._id);
     if (!iIsEnd || !jIsStart) continue;
 
-    const totalDemand = (rI.totalCapacity || 0) + (rJ.totalCapacity || 0);
-    if (totalDemand > maxCapacity) continue;
+    // Infrastructure Awareness: What is the strictest road in the combined route?
+    const combinedStops = [...rI.stops.slice(0, -1), ...rJ.stops.slice(1)];
+    let combinedStrictest = 'WIDE';
+    combinedStops.forEach(stop => {
+       const loc = locations.find(l => toId(l._id) === toId(stop.locationId));
+       const rt = (loc?.road_type || 'STANDARD').toUpperCase();
+       if (rt === 'NARROW') combinedStrictest = 'NARROW';
+       else if (rt === 'STANDARD' && combinedStrictest !== 'NARROW') combinedStrictest = 'STANDARD';
+    });
 
-    const mergedStops = [
-      ...rI.stops.slice(0, -1),
-      ...rJ.stops.slice(1),
-    ].map((st, idx) => ({ ...st, order: idx }));
+    const combinedDemand = rI.totalCapacity + rJ.totalCapacity;
+    const allowedMaxCap = maxCap[combinedStrictest];
 
+    // CRITICAL: Reject merge if demand exceeds the largest COMPATIBLE vehicle
+    if (combinedDemand > allowedMaxCap) {
+        continue; 
+    }
+
+    // Merge is valid
     const mergedRoute = {
-      vehicle: undefined,
-      vehicleName: 'Unassigned',
-      stops: mergedStops,
-      totalCapacity: totalDemand,
+      stops: combinedStops.map((stop, idx) => ({ ...stop, order: idx })),
+      totalCapacity: combinedDemand,
+      totalDistance: rI.totalDistance + rJ.totalDistance + distances[toId(s.i._id)][toId(s.j._id)] - distances[depotId][toId(s.i._id)] - distances[depotId][toId(s.j._id)],
     };
 
     recomputeTimesAndDistance(mergedRoute, distances, useTimeWindows, avgSpeedKmh);
 
-    // IMPROVEMENT: Only commit the merge if the new route is feasible.
-    if (!mergedRoute.isViolated) {
+    // IMPROVEMENT: Keep all merges to avoid dropping customers. 
+    // Lateness is now a metric, not a filter.
+    if (!mergedRoute.isViolated || true) {
       routes = routes.filter(r => r !== rI && r !== rJ);
       routes.push(mergedRoute);
     }
   }
 
   // -----------------------------------------------------------------
-  // Step 4: Assign Vehicles
+  // Step 4: Final Route Formatting
   // -----------------------------------------------------------------
-  const vehiclePool = [];
-  vehicles.forEach((v) => {
-    const count = v.count || 1;
-    for (let i = 0; i < count; i++) {
-      vehiclePool.push({
-        _id: v._id,
-        name: v.name,
-        capacity: v.capacity || 0,
-        used: false,
-      });
-    }
-  });
-
-  // IMPROVEMENT: Sort routes by demand for more efficient vehicle packing.
-  routes.sort((a, b) => b.totalCapacity - a.totalCapacity);
-
-  routes.forEach((r) => {
-    const v = vehiclePool.find((veh) => !veh.used && veh.capacity >= r.totalCapacity);
-    if (v) {
-      v.used = true;
-      r.vehicle = v._id;
-      r.vehicleName = v.name;
-    } else {
-      r.vehicle = null;
-      r.vehicleName = "Unassigned - Insufficient Capacity";
-    }
+  // Note: Vehicle assignment and multi-trip staggering are handled by the 
+  // global dispatcher in optimizationUtils.js to ensure consistency across algorithms.
+  routes.forEach((r, idx) => {
+    r.vehicle = null; // Let the global dispatcher decide
+    r.vehicleName = 'Unassigned';
   });
 
   // -----------------------------------------------------------------

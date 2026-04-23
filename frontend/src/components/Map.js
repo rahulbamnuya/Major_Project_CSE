@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import '../styles/Map.css';
@@ -27,14 +26,87 @@ const Map = ({
   optimizationId,
   onRoutedPolylinesUpdate,
   isLoadingRoutes = false,
+  selectedRouteIndex = null, // External control
 }) => {
   const routeColors = [
-    '#FF5733', '#33FF57', '#3357FF', '#F033FF', '#FF33A8',
-    '#33FFF6', '#FFB533', '#BD33FF', '#FF3333', '#33FF33'
+    '#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6',
+    '#0ea5e9', '#ec4899', '#14b8a6', '#f97316', '#64748b'
   ];
 
-  // State for selected route
-  const [selectedRoute, setSelectedRoute] = useState(null);
+  // State for selected route (can be controlled externally or internally)
+  const [internalSelectedRoute, setInternalSelectedRoute] = useState(null);
+
+  // Create professional, monochromatic custom icons
+  const createCustomIcon = (type, number = null, color = '#1e293b', isSelected = false) => {
+    let className = 'custom-marker';
+    let html = '';
+    let scale = isSelected ? 1.1 : 1;
+    let iconSize = [32 * scale, 32 * scale];
+    let iconAnchor = [(16 * scale), (32 * scale)];
+
+    // We no longer use solid fill for selection to avoid 'dark/same color' confusion.
+    // Instead, we use a thicker, high-contrast border and a premium shadow.
+    const baseStyle = `
+      width: 100%;
+      height: 100%;
+      background: white;
+      color: ${color};
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: ${isSelected ? '4px' : '1.5px'} solid ${color};
+      box-shadow: ${isSelected ? '0 0 15px rgba(0,0,0,0.3)' : '0 4px 6px -1px rgb(0 0 0 / 0.1)'};
+      transform: translateY(-50%);
+      z-index: ${isSelected ? 1000 : 1};
+      transition: all 0.3s ease;
+    `;
+
+    switch (type) {
+      case 'depot':
+        className += ' depot';
+        iconSize = [44 * scale, 44 * scale];
+        iconAnchor = [22 * scale, 44 * scale];
+        html = `<div style="${baseStyle} border-radius: 12px; font-size: ${24 * scale}px; border-width: 4px;">🏭</div>`;
+        break;
+      case 'location':
+        className += ' location';
+        iconSize = [32 * scale, 32 * scale];
+        iconAnchor = [16 * scale, 32 * scale];
+        html = `<div style="${baseStyle} border-radius: 50%; font-size: ${16 * scale}px;">📍</div>`;
+        break;
+      case 'vehicle':
+        className += ' vehicle';
+        iconSize = [36 * scale, 36 * scale];
+        iconAnchor = [18 * scale, 36 * scale];
+        html = `<div style="${baseStyle} border-radius: 10px; font-size: ${20 * scale}px; border-style: dashed;">🚛</div>`;
+        break;
+      case 'stop':
+        className += ' numbered-stop';
+        iconSize = [24 * scale, 24 * scale];
+        iconAnchor = [12 * scale, 24 * scale];
+        html = `
+          <div style="${baseStyle} border-radius: 50%; font-size: ${11 * scale}px; font-weight: 900;">
+            ${number || '•'}
+          </div>
+        `;
+        break;
+      default:
+        html = `<div style="${baseStyle} border-radius: 50%; font-size: 16px;">📍</div>`;
+    }
+
+    return L.divIcon({
+      className,
+      html,
+      iconSize,
+      iconAnchor,
+      popupAnchor: [0, -iconAnchor[1]]
+    });
+  };
+
+  const activeSelectedRoute = selectedRouteIndex !== null && selectedRouteIndex !== undefined && selectedRouteIndex !== -1
+    ? selectedRouteIndex
+    : internalSelectedRoute;
+
   const [hoveredRoute, setHoveredRoute] = useState(null);
   const [visibleRoutes, setVisibleRoutes] = useState(new Set(routes.map((_, index) => index)));
 
@@ -45,7 +117,7 @@ const Map = ({
 
   // Handle route click with real road routing
   const handleRouteClick = async (route, routeIndex) => {
-    setSelectedRoute(selectedRoute === routeIndex ? null : routeIndex);
+    setInternalSelectedRoute(activeSelectedRoute === routeIndex ? null : routeIndex);
     if (onRouteSelect) {
       onRouteSelect(route, routeIndex);
     }
@@ -109,6 +181,8 @@ const Map = ({
     setVisibleRoutes(newVisibleRoutes);
   };
 
+
+
   // Toggle all routes visibility
   const toggleAllRoutesVisibility = () => {
     if (visibleRoutes.size === routes.length) {
@@ -118,125 +192,7 @@ const Map = ({
     }
   };
 
-  // Create custom icons with better visibility
-  const createCustomIcon = (type, number = null) => {
-    let className = 'custom-marker';
-    let html = '';
-    let iconSize = [48, 48];
-    let iconAnchor = [24, 48];
 
-    switch (type) {
-      case 'depot':
-        className += ' depot';
-        html = `
-          <div style="
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, #FF6B47, #FF5733);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            border: 3px solid white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            animation: markerPulse 2s infinite;
-          ">🏭</div>
-        `;
-        break;
-      case 'location':
-        className += ' location';
-        html = `
-          <div style="
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #4A6FFF, #3357FF);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 20px;
-            border: 3px solid white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            animation: markerPulse 2s infinite 0.5s;
-          ">📍</div>
-        `;
-        iconSize = [40, 40];
-        iconAnchor = [20, 40];
-        break;
-      case 'vehicle':
-        className += ' vehicle';
-        html = `
-          <div style="
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, #4AFF6B, #33FF57);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 22px;
-            border: 3px solid white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            animation: markerPulse 2s infinite 1s;
-          ">🚛</div>
-        `;
-        iconSize = [44, 44];
-        iconAnchor = [22, 44];
-        break;
-      case 'stop':
-        className += ' numbered-stop';
-        html = `
-          <div style="
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, #374151, #111827);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 14px;
-            font-weight: bold;
-            border: 2px solid white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          ">${number || '•'}</div>
-        `;
-        iconSize = [36, 36];
-        iconAnchor = [18, 36];
-        break;
-      default:
-        html = `
-          <div style="
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #6B7280, #4B5563);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 20px;
-            border: 3px solid white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-          ">📍</div>
-        `;
-        iconSize = [40, 40];
-        iconAnchor = [20, 40];
-    }
-
-    return L.divIcon({
-      className,
-      html,
-      iconSize,
-      iconAnchor,
-      popupAnchor: [0, -iconAnchor[1]]
-    });
-  };
 
   // Convert route to polyline coordinates with better error handling
   const getRouteCoordinates = (route, routeIndex) => {
@@ -273,6 +229,88 @@ const Map = ({
     return useRoadNetwork && routedPolylines[routeIndex] && Array.isArray(routedPolylines[routeIndex]) && routedPolylines[routeIndex].length > 0;
   };
 
+  const memoizedMarkers = useMemo(() => {
+    return locations.map((location) => (
+      <Marker
+        key={`loc-marker-${location._id}`}
+        position={[location.latitude, location.longitude]}
+        icon={createCustomIcon(location.isDepot ? 'depot' : 'location')}
+        eventHandlers={{
+          click: () => onLocationSelect && onLocationSelect(location),
+        }}
+      >
+        <Popup>
+          <div className="location-popup">
+            <h3>{location.name}</h3>
+            <p><strong>Type:</strong> {location.isDepot ? 'Depot' : 'Delivery Location'}</p>
+            <p><strong>Address:</strong> {location.address}</p>
+            {location.demand && <p><strong>Demand:</strong> {location.demand}</p>}
+            <p><strong>Coordinates:</strong> {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}</p>
+          </div>
+        </Popup>
+      </Marker>
+    ));
+  }, [locations, onLocationSelect]);
+
+  const memoizedRoutes = useMemo(() => {
+    return routes.map((route, routeIndex) => {
+      const coordinates = getRouteCoordinates(route, routeIndex);
+      const color = routeColors[routeIndex % routeColors.length];
+      const vehicle = getVehicleById(route.vehicle);
+      const isSelected = activeSelectedRoute === routeIndex;
+      const isVisible = visibleRoutes.has(routeIndex);
+
+      if (coordinates.length < 2 || !isVisible) return null;
+
+      return (
+        <React.Fragment key={`route-group-${routeIndex}`}>
+          <Polyline
+            positions={coordinates}
+            color={color}
+            weight={isSelected ? 10 : hoveredRoute === routeIndex ? 8 : hasRealRoadData(routeIndex) ? 5 : 4}
+            opacity={isSelected ? 1 : hoveredRoute === routeIndex ? 0.95 : hasRealRoadData(routeIndex) ? 0.95 : 0.8}
+            dashArray={hasRealRoadData(routeIndex) ? null : '5, 5'}
+            eventHandlers={{
+              click: () => handleRouteClick(route, routeIndex),
+              mouseover: () => handleRouteHover(routeIndex),
+              mouseout: () => handleRouteLeave(),
+            }}
+          />
+          {coordinates.length > 2 && (
+            <Polyline
+              positions={coordinates}
+              color={color}
+              weight={2}
+              opacity={0.6}
+              dashArray="1, 10"
+            />
+          )}
+          {route.stops && route.stops.map((stop, stopIndex) => {
+            const location = locations.find(loc => (loc._id === stop?.locationId || loc._id?.toString() === stop?.locationId?.toString()));
+            if (!location) return null;
+            return (
+              <Marker
+                key={`stop-${routeIndex}-${stopIndex}`}
+                position={[location.latitude, location.longitude]}
+                icon={createCustomIcon('stop', stopIndex + 1, color, isSelected)}
+              >
+                <Popup>
+                  <div className="stop-popup">
+                    <h3>Stop {stopIndex + 1}</h3>
+                    <p><strong>{location.name}</strong></p>
+                    <p><strong>Route:</strong> {vehicle.name}</p>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+        </React.Fragment>
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routes, activeSelectedRoute, visibleRoutes, hoveredRoute, locations, routedPolylines, useRoadNetwork]);
+
+
   return (
     <div className="map-wrapper" style={{ height, position: 'relative' }}>
       <MapContainer
@@ -286,113 +324,8 @@ const Map = ({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Render locations */}
-        {locations.map((location) => (
-          <Marker
-            key={location._id}
-            position={[location.latitude, location.longitude]}
-            icon={createCustomIcon(location.isDepot ? 'depot' : 'location')}
-            eventHandlers={{
-              click: () => onLocationSelect && onLocationSelect(location),
-            }}
-          >
-            <Popup>
-              <div className="location-popup">
-                <h3>{location.name}</h3>
-                <p><strong>Type:</strong> {location.isDepot ? 'Depot' : 'Delivery Location'}</p>
-                <p><strong>Address:</strong> {location.address}</p>
-                {location.demand && <p><strong>Demand:</strong> {location.demand}</p>}
-                <p><strong>Coordinates:</strong> {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}</p>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* Render routes */}
-        {routes.map((route, routeIndex) => {
-          const coordinates = getRouteCoordinates(route, routeIndex);
-          const color = routeColors[routeIndex % routeColors.length];
-          const vehicle = getVehicleById(route.vehicle);
-
-          if (coordinates.length < 2 || !visibleRoutes.has(routeIndex)) return null;
-
-          return (
-            <React.Fragment key={`route-${routeIndex}`}>
-              {/* Main route polyline with enhanced visibility */}
-              <Polyline
-                positions={coordinates}
-                color={selectedRoute === routeIndex ? '#FFD700' : hoveredRoute === routeIndex ? '#FFA500' : color}
-                weight={selectedRoute === routeIndex ? 10 : hoveredRoute === routeIndex ? 8 : hasRealRoadData(routeIndex) ? 5 : 4}
-                opacity={selectedRoute === routeIndex ? 1 : hoveredRoute === routeIndex ? 0.95 : hasRealRoadData(routeIndex) ? 0.95 : 0.8}
-                dashArray={hasRealRoadData(routeIndex) ? null : '5, 5'}
-                className={selectedRoute === routeIndex ? 'route-highlight' : hasRealRoadData(routeIndex) ? 'road-route' : 'straight-route'}
-                eventHandlers={{
-                  click: () => handleRouteClick(route, routeIndex),
-                  mouseover: (e) => {
-                    handleRouteHover(routeIndex);
-                    e.target.setStyle({
-                      weight: selectedRoute === routeIndex ? 12 : hasRealRoadData(routeIndex) ? 8 : 7,
-                      opacity: 1
-                    });
-                  },
-                  mouseout: (e) => {
-                    handleRouteLeave();
-                    e.target.setStyle({
-                      weight: selectedRoute === routeIndex ? 10 : hasRealRoadData(routeIndex) ? 5 : 4,
-                      opacity: selectedRoute === routeIndex ? 1 : hasRealRoadData(routeIndex) ? 0.95 : 0.8,
-                      color: selectedRoute === routeIndex ? '#FFD700' : color
-                    });
-                  }
-                }}
-              />
-
-              {/* Route direction arrows */}
-              {coordinates.length > 2 && (
-                <Polyline
-                  positions={coordinates}
-                  color={color}
-                  weight={2}
-                  opacity={0.6}
-                  dashArray="1, 10"
-                />
-              )}
-
-              {/* Route stop markers with improved visibility */}
-              {route.stops && route.stops.map((stop, stopIndex) => {
-                const location = locations.find(loc => {
-                  const stopId = typeof stop.locationId === 'object' ? stop.locationId.toString() : stop.locationId;
-                  const locId = typeof loc._id === 'object' ? loc._id.toString() : loc._id;
-                  return stopId === locId;
-                });
-                if (!location) return null;
-
-                return (
-                  <Marker
-                    key={`stop-${routeIndex}-${stopIndex}`}
-                    position={[location.latitude, location.longitude]}
-                    icon={createCustomIcon('stop', stopIndex + 1)}
-                    eventHandlers={{
-                      click: () => {
-                        console.log('Stop clicked:', stopIndex + 1, location.name);
-                      }
-                    }}
-                  >
-                    <Popup>
-                      <div className="stop-popup">
-                        <h3>Stop {stopIndex + 1}</h3>
-                        <p><strong>Location:</strong> {location.name}</p>
-                        <p><strong>Route:</strong> {vehicle.name}</p>
-                        <p><strong>Sequence:</strong> {stopIndex + 1} of {route.stops.length}</p>
-                        {stop.demand && <p><strong>Demand:</strong> {stop.demand}</p>}
-                        <p><strong>Coordinates:</strong> {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}</p>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
-            </React.Fragment>
-          );
-        })}
+        {memoizedMarkers}
+        {memoizedRoutes}
       </MapContainer>
 
       {/* Route Summary Overlay */}
@@ -400,19 +333,19 @@ const Map = ({
         <div
           style={{
             position: 'absolute',
-            top: '12px',
+            bottom: '12px',
             right: '12px',
-            background: 'white',
-            border: '1px solid #e5e7eb',
-            borderRadius: '8px',
-            padding: '12px',
-            maxWidth: '280px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            background: '#ffffff',
+            border: '1px solid #94a3b8',
+            borderRadius: '16px',
+            padding: '16px',
+            maxWidth: '260px',
+            boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.2)',
             zIndex: 1000
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <h4 style={{ margin: '0', fontSize: '14px', fontWeight: '600' }}>
+            <h4 style={{ margin: '0', fontSize: '15px', fontWeight: '800', color: '#0f172a' }}>
               Route Summary
             </h4>
             <button
@@ -470,8 +403,8 @@ const Map = ({
                     }}
                   />
                   <div style={{ fontSize: '12px', flex: 1 }}>
-                    <div style={{ fontWeight: '500' }}>{vehicle.name}</div>
-                    <div style={{ color: '#6b7280' }}>
+                    <div style={{ fontWeight: '700', color: '#1e293b' }}>{vehicle.name}</div>
+                    <div style={{ color: '#374151', fontWeight: '600' }}>
                       {route.stops?.length || 0} stops • {Number(route.distance || 0).toFixed(1)} km
                     </div>
                   </div>
@@ -495,75 +428,7 @@ const Map = ({
         </div>
       )}
 
-      {/* Route Details Panel */}
-      {selectedRoute !== null && routes[selectedRoute] && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '12px',
-            left: '12px',
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(0, 0, 0, 0.1)',
-            borderRadius: '12px',
-            padding: '16px',
-            maxWidth: '300px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-            zIndex: 1000,
-            animation: 'slideInLeft 0.3s ease-out'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-            <div
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                background: routeColors[selectedRoute % routeColors.length],
-                marginRight: '8px'
-              }}
-            />
-            <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
-              Route {selectedRoute + 1} Details
-            </h4>
-          </div>
 
-          <div style={{ fontSize: '14px', color: '#4b5563', lineHeight: '1.5' }}>
-            <div style={{ marginBottom: '8px' }}>
-              <strong>Vehicle:</strong> {getVehicleById(routes[selectedRoute].vehicle).name}
-            </div>
-            <div style={{ marginBottom: '8px' }}>
-              <strong>Distance:</strong> {Number(routes[selectedRoute].distance || 0).toFixed(2)} km
-            </div>
-            <div style={{ marginBottom: '8px' }}>
-              <strong>Duration:</strong> {routes[selectedRoute].duration ? `${Math.floor(routes[selectedRoute].duration / 60)} min` : 'N/A'}
-            </div>
-            <div style={{ marginBottom: '8px' }}>
-              <strong>Stops:</strong> {routes[selectedRoute].stops?.length || 0}
-            </div>
-            <div>
-              <strong>Capacity Used:</strong> {routes[selectedRoute].totalCapacity || 0}
-            </div>
-          </div>
-
-          <button
-            onClick={() => setSelectedRoute(null)}
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              background: 'none',
-              border: 'none',
-              fontSize: '18px',
-              cursor: 'pointer',
-              color: '#6b7280',
-              padding: '4px'
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
 
       {/* Location Summary */}
       {locations && locations.length > 0 && (

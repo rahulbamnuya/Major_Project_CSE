@@ -38,6 +38,11 @@ const LocationSchema = new mongoose.Schema({
     type: Number, // Stored as minutes from midnight (e.g., 5 PM = 1020)
     default: null,
   },
+  road_type: {
+    type: String,
+    enum: ['WIDE', 'STANDARD', 'NARROW'],
+    default: 'STANDARD'
+  },
   date: {
     type: Date,
     default: Date.now

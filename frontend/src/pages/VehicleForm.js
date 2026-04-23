@@ -6,6 +6,7 @@ import {
 } from 'react-icons/fa';
 import VehicleService from '../services/vehicle.service';
 import { useToast } from '../components/ToastProvider';
+import { getVehicleThresholds } from './Settings';
 
 const VehicleForm = () => {
   const { id } = useParams();
@@ -22,7 +23,8 @@ const VehicleForm = () => {
     average_speed: '40',
     start_time: '08:00',
     end_time: '20:00',
-    maxDistance: '1000'
+    maxDistance: '1000',
+    vehicle_type: 'LARGE'
   });
 
   const [loading, setLoading] = useState(false);
@@ -42,7 +44,8 @@ const VehicleForm = () => {
         average_speed: (response.average_speed || '40').toString(),
         start_time: response.start_time || '08:00',
         end_time: response.end_time || '20:00',
-        maxDistance: (response.maxDistance || '1000').toString()
+        maxDistance: (response.maxDistance || '1000').toString(),
+        vehicle_type: response.vehicle_type || 'LARGE'
       });
       notify('Vehicle data loaded', 'success');
     } catch (err) {
@@ -61,7 +64,19 @@ const VehicleForm = () => {
   }, [isEditMode, fetchVehicle]);
 
   const onChange = e => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    
+    if (name === 'capacity') {
+      const capVal = parseInt(value) || 0;
+      const { smallThreshold, mediumThreshold } = getVehicleThresholds();
+      let newType = 'LARGE';
+      if (capVal <= smallThreshold) newType = 'SMALL';
+      else if (capVal <= mediumThreshold) newType = 'MEDIUM';
+      
+      setFormData(prev => ({ ...prev, capacity: value, vehicle_type: newType }));
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const onSubmit = async e => {
@@ -80,7 +95,8 @@ const VehicleForm = () => {
         average_speed: parseFloat(formData.average_speed) || 0,
         start_time: formData.start_time,
         end_time: formData.end_time,
-        maxDistance: parseFloat(formData.maxDistance) || 0
+        maxDistance: parseFloat(formData.maxDistance) || 0,
+        vehicle_type: formData.vehicle_type
       };
 
       if (isEditMode) {
@@ -184,16 +200,34 @@ const VehicleForm = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Max Range (km)</label>
-                <input
-                  type="number"
-                  name="maxDistance"
-                  value={formData.maxDistance}
-                  onChange={onChange}
-                  min="1"
-                  className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Max Range (km)</label>
+                  <input
+                    type="number"
+                    name="maxDistance"
+                    value={formData.maxDistance}
+                    onChange={onChange}
+                    min="1"
+                    className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Access Profile (Road Compatibility)</label>
+                  <select
+                    name="vehicle_type"
+                    value={formData.vehicle_type}
+                    onChange={onChange}
+                    className="w-full bg-blue-50 dark:bg-slate-900 border border-blue-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 appearance-none font-bold text-blue-700 dark:text-blue-400 cursor-pointer shadow-sm hover:border-blue-300 transition-colors"
+                  >
+                    <option value="LARGE">LARGE — Wide Roads Only</option>
+                    <option value="MEDIUM">MEDIUM — Standard + Wide Roads</option>
+                    <option value="SMALL">SMALL — All Roads (Inc. Alleys)</option>
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-2 italic px-1 font-medium italic">
+                    * Automatically suggests profile based on capacity, but can be manually overridden for specialized vehicles.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

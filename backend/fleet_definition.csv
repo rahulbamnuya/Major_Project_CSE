@@ -1,0 +1,11 @@
+name,capacity,per_km_cost,vehicle_type,average_speed,description
+Sanchi Mini Delivery Van,600,10,SMALL,35,Small agile van for dense neighborhood lanes
+Insulated Milk Tanker (M),3500,28,MEDIUM,40,Temperature controlled tanker for city supply hubs
+Sanchi Mega Milk Tanker (L),12000,55,LARGE,30,High-volume inter-city transport (WIDE Roads Only)
+Refrigerated Box Truck,5000,45,LARGE,32,Large cold-chain transport for wide boulevards
+Sanchi Booth Supply Rickshaw,300,7,SMALL,22,Micro-delivery for Sanchi milk booths in narrow alleys
+Bolero Camper Milk Carrier,1500,20,MEDIUM,38,Versatile medium milk crate carrier
+Sanchi High-Speed Interceptor,800,18,SMALL,45,Emergency low-load delivery across the city
+Standard Milk Crate Truck,2500,24,MEDIUM,33,Standard route vehicle for normal road networks
+Dairy Bulk Logistic Prime,15000,75,LARGE,25,Massive industrial scale logistics (Major Highways Only)
+Sanchi E-Cargo Trike,250,5,SMALL,18,Ultra-compact narrow zone electrical carrier

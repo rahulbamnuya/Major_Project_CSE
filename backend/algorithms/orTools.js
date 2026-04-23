@@ -4,7 +4,7 @@ const { clarkeWrightAlgorithmWithTimeWindows } = require('./clarkeWright');
 const { enhancedClarkeWrightAlgorithm } = require('./enhancedClarkeWright');
 
 exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
-  const { useTimeWindows = false, avgSpeedKmh = 25 } = options;
+  const { useTimeWindows = false, avgSpeedKmh = 25, strategy = 'hybrid', smallThreshold = 1000, mediumThreshold = 4000 } = options;
 
   // Use local Python API for development
   // For production, use: 'https://major-project-cse-222.onrender.com/optimize'
@@ -22,10 +22,13 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
         serviceTime: loc.serviceTime || 0, // in minutes
         timeWindowStart: loc.timeWindow ? loc.timeWindow[0] : null, // in minutes
         timeWindowEnd: loc.timeWindow ? loc.timeWindow[1] : null, // in minutes
+        road_type: loc.road_type || 'STANDARD',
       })),
       vehicles: vehicles.map(v => ({
         id: v._id.toString(),
-        capacity: v.capacity
+        capacity: v.capacity,
+        average_speed: parseFloat(v.average_speed) || avgSpeedKmh,
+        vehicle_type: v.vehicle_type
       })),
       demands: allLocations.map(loc => loc.demand || 0),
       include_geometry: true,
@@ -33,6 +36,9 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
       useTimeWindows: useTimeWindows,
       traffic_factor: 1.25,
       avg_speed_kmh: avgSpeedKmh, // Send average speed from frontend
+      strategy: strategy,
+      small_threshold: smallThreshold,
+      medium_threshold: mediumThreshold,
     };
 
     // Ensure depot is at index 0 and has zero demand
@@ -53,13 +59,13 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
       // This ensures Index 0 maps to Depot, Index 1 to first customer, etc.
       const mappingLocations = [depot, ...locations];
 
-      return response.data.result.map(route => {
-        const vehicle = vehicles.find(v => v._id.toString() === route['Vehicle ID']);
+      const routes = response.data.result.map(route => {
+        const rawVehicleId = route['Vehicle ID'].split('_Trip')[0];
+        const vehicle = vehicles.find(v => v._id.toString() === rawVehicleId);
         const routeIndices = route['Route Indices'] || [];
         const arrivalTimes = route['Arrival Times (seconds)'] || [];
         const serviceTimes = route['Service Times (seconds)'] || [];
 
-        // --- MAPPING TO THE NEW, CLEAN SCHEMA ---
         const stops = routeIndices.map((locIndex, order) => {
           const loc = mappingLocations[locIndex];
           if (!loc) return null;
@@ -71,34 +77,39 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
             longitude: loc.longitude,
             demand: loc.demand || 0,
             order,
-            // Storing all time data directly on the stop object in SECONDS
             arrivalTime: arrivalTimes[order] ?? null,
             serviceTime: serviceTimes[order] ?? null,
             timeWindowStart: loc.timeWindow ? loc.timeWindow[0] * 60 : null,
             timeWindowEnd: loc.timeWindow ? loc.timeWindow[1] * 60 : null,
+            road_type: loc.road_type || 'STANDARD',
           };
         }).filter(Boolean);
 
         return {
-          vehicle: route['Vehicle ID'],
-          vehicleName: vehicle?.name || `Vehicle ${route['Vehicle ID']}`,
+          vehicle: rawVehicleId,
+          vehicleName: vehicle?.name ? `${vehicle.name} (${route['Vehicle ID'].includes('_Trip') ? 'Trip ' + route['Vehicle ID'].split('_Trip')[1] : 'Trip 1'})` : `Vehicle ${route['Vehicle ID']}`,
           distance: route['Distance (km)'] || 0,
-          // Use the duration from the backend and convert to minutes for DB storage
           duration: Math.round((route['Duration (seconds)'] || 0) / 60),
           totalCapacity: route['Load Carried'] || 0,
-          stops, // The clean, correct stops array
+          stops,
           routeGeometry: route['Route Geometry'] || [],
         };
       });
+
+      return {
+        routes,
+        droppedNodes: response.data.dropped_nodes || []
+      };
     }
 
     console.warn('⚠️ Python API did not return a valid result, falling back...');
-    return enhancedClarkeWrightAlgorithm(vehicles, locations, depot);
+    const fallBackRoutes = await enhancedClarkeWrightAlgorithm(vehicles, locations, depot);
+    return { routes: fallBackRoutes, droppedNodes: [] };
 
   } catch (error) {
     console.error('❌ Error calling Python VRP solver:', error.message);
-    if (error.response?.data) console.error('Response data:', error.response.data);
     console.log('🔁 Falling back to Clarke-Wright due to API error.');
-    return clarkeWrightAlgorithmWithTimeWindows(vehicles, locations, depot, useTimeWindows);
+    const fallBackRoutes = await clarkeWrightAlgorithmWithTimeWindows(vehicles, locations, depot, useTimeWindows);
+    return { routes: fallBackRoutes, droppedNodes: [] };
   }
 };

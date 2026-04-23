@@ -1,0 +1,83 @@
+[
+    {
+        "Vehicle ID": "Tata_Ace_2",
+        "Route Indices": [
+            0,
+            8,
+            4,
+            0
+        ],
+        "Load Carried": 680,
+        "Distance (km)": 16.15,
+        "Duration (seconds)": 9479,
+        "Arrival Times (seconds)": [
+            21600,
+            28800,
+            29584,
+            31079
+        ],
+        "Service Times (seconds)": [
+            0,
+            600,
+            600,
+            0
+        ]
+    },
+    {
+        "Vehicle ID": "Mahindra_1",
+        "Route Indices": [
+            0,
+            2,
+            9,
+            6,
+            0
+        ],
+        "Load Carried": 870,
+        "Distance (km)": 5.57,
+        "Duration (seconds)": 9584,
+        "Arrival Times (seconds)": [
+            21600,
+            28800,
+            29565,
+            30341,
+            31184
+        ],
+        "Service Times (seconds)": [
+            0,
+            600,
+            600,
+            600,
+            0
+        ]
+    },
+    {
+        "Vehicle ID": "Eicher_1",
+        "Route Indices": [
+            0,
+            1,
+            5,
+            7,
+            3,
+            0
+        ],
+        "Load Carried": 4930,
+        "Distance (km)": 20.82,
+        "Duration (seconds)": 12454,
+        "Arrival Times (seconds)": [
+            21600,
+            28800,
+            29692,
+            31691,
+            33033,
+            34054
+        ],
+        "Service Times (seconds)": [
+            0,
+            600,
+            1800,
+            600,
+            600,
+            0
+        ]
+    }
+]

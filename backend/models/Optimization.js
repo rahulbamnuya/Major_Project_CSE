@@ -60,6 +60,7 @@ const AlgorithmResultSchema = new mongoose.Schema({
   totalCost: Number, // Total cost for this result
   executionTime: Number,
   error: String,
+  droppedNodes: [mongoose.Schema.Types.Mixed], // NEW: Store info on unassigned nodes
 });
 
 const OptimizationSchema = new mongoose.mongoose.Schema({
@@ -70,6 +71,7 @@ const OptimizationSchema = new mongoose.mongoose.Schema({
   selectedAlgorithm: String,
   algorithmResults: [AlgorithmResultSchema],
   routes: [RouteSchema],
+  droppedNodes: [mongoose.Schema.Types.Mixed], // NEW: Store info on unassigned nodes
   totalDistance: Number,
   totalDuration: Number,
   totalCost: Number, // Sum of all route costs

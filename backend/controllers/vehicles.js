@@ -47,7 +47,8 @@ exports.createVehicle = async (req, res) => {
     driver_cost_per_km,
     average_speed,
     start_time,
-    end_time
+    end_time,
+    vehicle_type
   } = req.body;
 
   try {
@@ -67,13 +68,14 @@ exports.createVehicle = async (req, res) => {
       vehiclesToInsert.push({
         name: `${name}${suffix}`,
         capacity,
-        count: 1, // each individual vehicle is one instance
+        count: 1,
         maxDistance,
         fuel_cost_per_km,
         driver_cost_per_km,
         average_speed,
         start_time,
         end_time,
+        vehicle_type: vehicle_type || 'LARGE',
         user: userId
       });
     }
@@ -104,7 +106,8 @@ exports.updateVehicle = async (req, res) => {
     driver_cost_per_km,
     average_speed,
     start_time,
-    end_time
+    end_time,
+    vehicle_type
   } = req.body;
 
   try {
@@ -130,6 +133,7 @@ exports.updateVehicle = async (req, res) => {
     if (average_speed !== undefined) vehicle.average_speed = average_speed;
     if (start_time !== undefined) vehicle.start_time = start_time;
     if (end_time !== undefined) vehicle.end_time = end_time;
+    if (vehicle_type !== undefined) vehicle.vehicle_type = vehicle_type;
 
     await vehicle.save();
     res.json(vehicle);

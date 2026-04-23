@@ -7,7 +7,7 @@ const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60; // 10 units per minute
 const DEFAULT_SPEED_KMH = 40;
 const TRAFFIC_FACTOR = 1.25;
 const DEPOT_START_TIME_SECONDS = 360 * 60; // 6:00 AM (360 * 60 = 21600)
-const DEPOT_END_TIME_SECONDS = 1080 * 60;  // 6:00 PM (1080 * 60 = 64800)
+const DEPOT_END_TIME_SECONDS = 22 * 3600; // 10:00 PM (Upgraded for Multi-Trip)
 const MAX_TIME_WINDOW_SECONDS = 24 * 3600; // 24 hours for "always open" fallback
 
 // Helper to stringify ids
@@ -83,7 +83,8 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
                 currentTime,
                 depotId,
                 useTimeWindows,
-                speedKmh
+                speedKmh,
+                vehicle
             );
 
             if (!nextLocation) break; // no feasible candidate
@@ -131,7 +132,8 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
                 order: route.stops.length,
                 arrivalTime: Math.round(arrivalTime),
                 serviceTime: Math.round(serviceTimeTotal),
-                departureTime: Math.round(serviceStartTime + serviceTimeRaw)
+                departureTime: Math.round(serviceStartTime + serviceTimeRaw),
+                road_type: nextLocation.road_type || 'STANDARD'
             });
             route.routeGeometry.push([nextLocation.latitude, nextLocation.longitude]);
 
@@ -197,7 +199,8 @@ function chooseNextLocation(
     currentTime,
     depotId,
     useTimeWindows,
-    speedKmh
+    speedKmh,
+    vehicle
 ) {
     const currentId = toId(current._id);
     const locationMap = new Map(allLocations.map(l => [toId(l._id), l]));
@@ -212,6 +215,16 @@ function chooseNextLocation(
 
         // capacity constraint
         if ((currentLoad + (candidate.demand || 0)) > vehicleCapacity) continue;
+
+        // INFRASTRUCTURE CHECK
+        const rt = (candidate.road_type || 'STANDARD').toUpperCase();
+        const vt = (typeof vehicle.vehicle_type === 'string' ? vehicle.vehicle_type : 'LARGE').toUpperCase();
+        
+        // RULE 1: NARROW -> Only SMALL
+        if (rt === 'NARROW' && vt !== 'SMALL') continue;
+        
+        // RULE 2: STANDARD -> No LARGE
+        if (rt === 'STANDARD' && vt === 'LARGE') continue;
 
         // guard: distances must exist for current->candidate and candidate->depot, or compute fallback
         const distCurToCand = (distances[currentId] && distances[currentId][candidateId]) ??
@@ -252,8 +265,8 @@ function chooseNextLocation(
         const finalArrivalDepot = departureFromCandidate + travelTimeToDepot;
 
         if (finalArrivalDepot > DEPOT_END_TIME_SECONDS) {
-            // can't return in time, skip candidate
-            continue;
+            // Softening: Allow the candidate even if it's late, so we don't drop customers.
+            // continue;
         }
 
         // pheromone & heuristic (guard pheromone existence: default to 1)

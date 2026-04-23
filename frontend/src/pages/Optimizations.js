@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import OptimizationService from '../services/optimization.service';
 import '../styles/Optimizations.css';
@@ -11,7 +11,8 @@ import {
   FaRoad,
   FaClock,
   FaTrash,
-  FaEye
+  FaEye,
+  FaExclamationTriangle
 } from 'react-icons/fa';
 
 const Optimizations = () => {
@@ -20,11 +21,15 @@ const Optimizations = () => {
   const [error, setError] = useState('');
   const { notify } = useToast();
 
-  useEffect(() => {
-    fetchOptimizations();
-  }, []);
+  const formatDuration = (minutes) => {
+    if (!minutes) return '0m';
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
 
-  const fetchOptimizations = async () => {
+  const fetchOptimizations = useCallback(async () => {
     try {
       setLoading(true);
       const response = await OptimizationService.getAll();
@@ -37,7 +42,11 @@ const Optimizations = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [notify]);
+
+  useEffect(() => {
+    fetchOptimizations();
+  }, [fetchOptimizations]);
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this optimization?')) {
@@ -114,9 +123,20 @@ const Optimizations = () => {
                   </span>
                 </div>
 
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 line-clamp-1" title={optimization.name}>
-                  {optimization.name || 'Untitled Optimization'}
-                </h3>
+                <div className="flex justify-between items-center mb-4">
+                   <h3 className="text-xl font-bold text-slate-900 dark:text-white line-clamp-1" title={optimization.name}>
+                     {optimization.name || 'Untitled Optimization'}
+                   </h3>
+                   {optimization.algorithm?.toLowerCase().includes('hybrid') || optimization.selectedAlgorithm?.toLowerCase().includes('hybrid') ? (
+                     <span className="text-[8px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter border border-emerald-200">
+                        Geo-Aware
+                     </span>
+                   ) : (
+                     <span className="text-[8px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">
+                        Baseline
+                     </span>
+                   )}
+                </div>
 
                 <div className="space-y-3 mb-6 flex-grow">
                   <div className="flex justify-between items-center text-sm">
@@ -126,13 +146,20 @@ const Optimizations = () => {
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2"><FaClock /> Duration</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200">
-                      {optimization.totalDuration ? `${Math.floor(optimization.totalDuration / 60)} min` : '-'}
+                      {formatDuration(optimization.totalDuration)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2"><FaRoute /> Routes</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200">{optimization.routes ? optimization.routes.length : 0}</span>
                   </div>
+                  {/* Summary of violations if any */}
+                  {optimization.droppedNodes?.length > 0 && (
+                    <div className="flex justify-between items-center text-sm text-amber-600 font-bold">
+                       <span className="flex items-center gap-2"><FaExclamationTriangle className="text-[10px]" /> Dropped</span>
+                       <span>{optimization.droppedNodes.length} Stops</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-700 mt-auto">

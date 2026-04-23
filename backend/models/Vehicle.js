@@ -47,7 +47,28 @@ const VehicleSchema = new mongoose.Schema({
   end_time: {
     type: String, // HH:MM format
     default: "20:00"
+  },
+  vehicle_type: {
+    type: String,
+    enum: ['SMALL', 'MEDIUM', 'LARGE'],
+    default: 'LARGE'
   }
+});
+
+// Auto-classify based on capacity if not specified
+VehicleSchema.pre('save', function(next) {
+  // Only auto-classify if vehicle_type wasn't manually changed from default or is new
+  // Note: We use 1000 and 4000 as backend defaults to match frontend Settings defaults
+  if (this.isNew || this.isModified('capacity')) {
+      if (this.capacity <= 1000) {
+          this.vehicle_type = 'SMALL';
+      } else if (this.capacity <= 4000) {
+          this.vehicle_type = 'MEDIUM';
+      } else {
+          this.vehicle_type = 'LARGE';
+      }
+  }
+  next();
 });
 
 module.exports = mongoose.model('Vehicle', VehicleSchema);

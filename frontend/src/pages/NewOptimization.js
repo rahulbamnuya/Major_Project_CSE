@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaTruck, FaMapMarkerAlt, FaCogs, FaArrowRight, FaArrowLeft,
-  FaCheckCircle, FaSearch, FaPlay, FaRobot, FaLayerGroup,
+  FaCheckCircle, FaPlay, FaRobot, FaLayerGroup,
   FaWeightHanging, FaClock, FaRoute, FaCheck
 } from 'react-icons/fa';
 import VehicleService from '../services/vehicle.service';
@@ -11,7 +11,7 @@ import OptimizationService from '../services/optimization.service';
 import Map from '../components/Map';
 import { useToast } from '../components/ToastProvider';
 import { useAuth } from '../context/AuthContext';
-import L from 'leaflet';
+import { getVehicleThresholds } from './Settings';
 
 // --- Loading Screen Component ---
 const OptimizationLoadingScreen = ({ progress, currentTask }) => {
@@ -84,8 +84,8 @@ const NewOptimization = () => {
   // Configuration State
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
-  const [algorithm, setAlgorithm] = useState('clarke-wright');
-  const [runComparison, setRunComparison] = useState(false);
+  const [algorithm, setAlgorithm] = useState('or-tools-hybrid');
+  const [runComparison, setRunComparison] = useState(true);
   const [useTimeWindows, setUseTimeWindows] = useState(true);
   const [avgSpeedKmh, setAvgSpeedKmh] = useState(25); // Average speed in km/h
 
@@ -189,6 +189,7 @@ const NewOptimization = () => {
         });
       }, 800);
 
+      const thresholds = getVehicleThresholds();
       const payload = {
         name: name.trim(),
         vehicleIds: selectedVehicles,
@@ -196,7 +197,9 @@ const NewOptimization = () => {
         algorithm,
         runComparison,
         useTimeWindows,
-        avgSpeedKmh // Send average speed to backend
+        avgSpeedKmh,
+        smallThreshold: thresholds.smallThreshold,
+        mediumThreshold: thresholds.mediumThreshold,
       };
 
       const response = await OptimizationService.create(payload);
@@ -340,10 +343,19 @@ const NewOptimization = () => {
   };
 
   const renderStep3 = () => {
-    // Validation Check for Capacity
-    const totalCapacity = vehicles.filter(v => selectedVehicles.includes(v._id)).reduce((s, v) => s + (v.capacity * (v.count || 1)), 0);
+    // Validation Check for Capacity (Dynamic Multi-trip: min 2, max 5 trips per vehicle)
+    const totalCapacitySingle = vehicles.filter(v => selectedVehicles.includes(v._id)).reduce((s, v) => s + (v.capacity * (v.count || 1)), 0);
+    const capacityDivisor = totalCapacitySingle > 0 ? totalCapacitySingle : 1;
     const totalDemand = locations.filter(l => selectedLocations.includes(l._id)).reduce((s, l) => s + (l.demand || 0), 0);
-    const isCapacityIssue = totalCapacity < totalDemand;
+    
+    // Dynamic trips logic: how many trips do we NEED?
+    const neededTrips = Math.ceil(totalDemand / capacityDivisor);
+    // Backend cap is 5 trips to ensure search performance
+    const plannedTrips = Math.max(2, Math.min(5, neededTrips || 0)); 
+    const totalCapacityMulti = totalCapacitySingle * plannedTrips;
+
+    const isCapacityIssue = totalCapacityMulti < totalDemand;
+    const isMultiTripNeeded = totalCapacitySingle < totalDemand;
 
     return (
       <div className="max-w-2xl mx-auto space-y-8 anim-fade-up pb-20">
@@ -356,12 +368,29 @@ const NewOptimization = () => {
         {/* Warning Cards */}
         {isCapacityIssue && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 rounded-xl flex items-start gap-3">
-            <FaWeightHanging className="text-amber-500 mt-1" />
+            <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/40 rounded-lg flex items-center justify-center text-amber-600 shrink-0">
+               <FaWeightHanging />
+            </div>
             <div>
-              <h4 className="font-bold text-amber-700 dark:text-amber-400">Capacity Warning</h4>
+              <h4 className="font-bold text-amber-700 dark:text-amber-400">Extreme Demand Warning</h4>
               <p className="text-sm text-amber-600 dark:text-amber-500">
-                Total Demand ({totalDemand}) exceeds selected Vehicle Capacity ({totalCapacity}).
-                Some orders may be left unassigned.
+                Total Demand ({totalDemand}kg) exceeds the absolute limit of your fleet ({totalCapacityMulti}kg) even after scheduling <strong>{plannedTrips} trips per vehicle</strong>. 
+                Some locations will be skipped. Try adding more vehicles to this run.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isMultiTripNeeded && !isCapacityIssue && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 p-4 rounded-xl flex items-start gap-3">
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/40 rounded-lg flex items-center justify-center text-blue-600 shrink-0">
+               <FaTruck />
+            </div>
+            <div>
+              <h4 className="font-bold text-blue-700 dark:text-blue-400">Dynamic Multi-Trip Scaling</h4>
+              <p className="text-sm text-blue-600 dark:text-blue-500">
+                The current demand ({totalDemand}kg) requires more than single-trip runs. 
+                Our AI will automatically scale your fleet to <strong>{neededTrips} trips per vehicle</strong> to ensure 100% stop fulfillment.
               </p>
             </div>
           </div>
@@ -394,20 +423,30 @@ const NewOptimization = () => {
             </div>
 
             {!runComparison ? (
-              <select
-                value={algorithm}
-                onChange={(e) => setAlgorithm(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="clarke-wright">Clarke-Wright Savings (Standard)</option>
-                <option value="nearest-neighbor">Nearest Neighbor (Fastest)</option>
-                <option value="genetic">Genetic Algorithm (High Quality)</option>
-                <option value="ant-colony">Ant Colony Optimization</option>
-                <option value="or-tools">Google OR-Tools (Production Grade)</option>
-              </select>
+              <div className="space-y-3">
+                <select
+                  value={algorithm}
+                  onChange={(e) => setAlgorithm(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 font-bold"
+                >
+                  <optgroup label="─── Strategic Algorithms ───">
+                    <option value="or-tools-hybrid">✦ Advanced Geo-VRP Hybrid (Highest Integrity)</option>
+                    <option value="clarke-wright">Modified Clarke-Wright (Infra-Aware)</option>
+                    <option value="nearest-neighbor">Nearest Neighbor (Fastest)</option>
+                    <option value="genetic">Genetic Algorithm</option>
+                    <option value="ant-colony">Ant Colony Optimization</option>
+                  </optgroup>
+                </select>
+                {algorithm.startsWith('or-tools') && (
+                  <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800 text-xs text-indigo-700 dark:text-indigo-300 flex items-start gap-2">
+                    <span className="text-lg leading-none">🛰️</span>
+                    <span><strong>Geo-VRP Engine Active:</strong> This algorithm integrates OpenStreetMap road metadata to enforce infrastructure-aware fleet assignment. Narrow roads will <strong>only</strong> receive compact vehicles automatically.</span>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 rounded-xl text-sm border border-indigo-100 dark:border-indigo-800">
-                We will run all algorithms in parallel and select the one with the lowest cost and best efficiency automatically.
+                <strong>Comparison Mode:</strong> All 7 algorithms (including Advanced Geo-VRP Engine variants) will run in parallel. The system will rank them by total cost and infrastructure compliance.
               </div>
             )}
           </div>

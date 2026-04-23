@@ -158,7 +158,7 @@ exports.getOptimizationPublic = async (req, res) => {
 // };
 
 exports.createOptimization = async (req, res) => {
-  const { name, vehicleIds, locationIds, algorithm, runComparison = false, avgSpeedKmh = 25 } = req.body;
+  const { name, vehicleIds, locationIds, algorithm, runComparison = false, avgSpeedKmh = 25, smallThreshold = 1000, mediumThreshold = 4000 } = req.body;
 
   // Coerce useTimeWindows into a strict boolean
   let useTimeWindows = req.body.useTimeWindows;
@@ -191,6 +191,7 @@ exports.createOptimization = async (req, res) => {
         demand: 0,
         isDepot: true,
         timeWindow: [6 * 60, 18 * 60], // 06:00 - 18:00 in minutes
+        road_type: 'WIDE',
         user: req.user.id
       };
       // Create depot in DB and add to locations
@@ -205,13 +206,47 @@ exports.createOptimization = async (req, res) => {
       return res.status(400).json({ msg: 'A depot location must be included.' });
     }
 
-    // 3. Algorithm mapping
+    // 2.1 Calculate Virtual Multi-Trip Expansion for JS-based algorithms
+    const totalDemand = locations.reduce((sum, loc) => sum + (loc.demand || 0), 0);
+    const totalCapacitySingle = vehicles.reduce((sum, v) => sum + v.capacity, 0);
+    const neededTrips = Math.ceil(totalDemand / (totalCapacitySingle || 1)) + 1;
+    const MAX_TRIPS = Math.min(6, Math.max(2, neededTrips));
+
+    console.log(`📊 Multi-Trip Simulation: Demand ${totalDemand} / Capacity ${totalCapacitySingle}. Scaling all JS algorithms to ${MAX_TRIPS} trips/vehicle.`);
+
+    const expandedVehiclesJS = [];
+    vehicles.forEach(v => {
+      for (let t = 1; t <= MAX_TRIPS; t++) {
+        expandedVehiclesJS.push({
+          ...v.toObject(),
+          _id: `${v._id}_T${t}`,
+          name: `${v.name} (Trip ${t})`
+        });
+      }
+    });
+
+    // 3. Algorithm mapping: JS algorithms use expanded fleet, Python handles expansion internally
     const algorithmMap = {
-      'clarke-wright': { name: 'Clarke-Wright Savings', function: clarkeWrightAlgorithmWithTimeWindows },
-      'nearest-neighbor': { name: 'Nearest Neighbor', function: nearestNeighborAlgorithm },
-      'genetic': { name: 'Genetic Algorithm', function: geneticAlgorithmVRP },
-      'ant-colony': { name: 'Ant Colony Optimization', function: antColonyOptimizationVRP },
-      'or-tools': { name: 'Google OR-Tools', function: orToolsAlgorithm }
+      'clarke-wright': { 
+        name: 'Modified Clarke-Wright', 
+        function: (v, l, d, opts) => clarkeWrightAlgorithmWithTimeWindows(expandedVehiclesJS, l, d, opts) 
+      },
+      'nearest-neighbor': { 
+        name: 'Nearest Neighbor', 
+        function: (v, l, d, opts) => nearestNeighborAlgorithm(expandedVehiclesJS, l, d, opts) 
+      },
+      'genetic': { 
+        name: 'Genetic Algorithm', 
+        function: (v, l, d, opts) => geneticAlgorithmVRP(expandedVehiclesJS, l, d, opts) 
+      },
+      'ant-colony': { 
+        name: 'Ant Colony Optimization', 
+        function: (v, l, d, opts) => antColonyOptimizationVRP(expandedVehiclesJS, l, d, opts) 
+      },
+      'or-tools-hybrid': { 
+        name: 'Advanced Geo-VRP Hybrid (Compliance focus)', 
+        function: (v, l, d, opts) => orToolsAlgorithm(vehicles, l, d, { ...opts, strategy: 'hybrid' }) 
+      }
     };
 
     const optimizationContext = {
@@ -220,11 +255,13 @@ exports.createOptimization = async (req, res) => {
       vehicleIds,
       locationIds,
       vehicles,
-      locations, // Non-depot locations
+      locations,
       depot,
       algorithmMap,
       useTimeWindows,
-      avgSpeedKmh // Pass average speed to algorithms
+      avgSpeedKmh,
+      smallThreshold,
+      mediumThreshold
     };
 
     // 4. Run comparison or single algorithm
@@ -266,18 +303,25 @@ async function runAlgorithmComparison(req, res, context) {
     const startTime = Date.now();
 
     try {
-      const rawRoutes = await Promise.resolve(algo.function(vehicles, locations, depot, algorithmOptions));
+      const solverOutput = await Promise.resolve(algo.function(vehicles, locations, depot, algorithmOptions));
       const executionTime = Date.now() - startTime;
 
-      const finalRoutes = assignVehiclesToRoutes(rawRoutes, vehicles);
-      const metrics = calculateRouteMetrics(finalRoutes, locations, vehicles, depot._id, useTimeWindows);
+      const routes = solverOutput.routes || (Array.isArray(solverOutput) ? solverOutput : []);
+      let droppedNodes = solverOutput.droppedNodes || [];
+
+      // 🚚 Strict Vehicle Assignment
+      const { assignedRoutes, unassignedStops } = assignVehiclesToRoutes(routes, vehicles);
+      droppedNodes = [...droppedNodes, ...unassignedStops];
+      
+      const metrics = calculateRouteMetrics(assignedRoutes, locations, vehicles, depot._id, useTimeWindows);
 
       console.log(`[Comparison] SUCCESS: ${algo.name} finished in ${executionTime}ms.`);
 
       allAlgorithmResults.push({
         algorithm: algo.name,
         algorithmKey: key,
-        routes: finalRoutes,
+        routes: assignedRoutes,
+        droppedNodes: droppedNodes,
         executionTime,
         ...metrics
       });
@@ -311,6 +355,7 @@ async function runAlgorithmComparison(req, res, context) {
     algorithmResults: allAlgorithmResults,
     selectedAlgorithm: bestResult.algorithmKey,
     routes: bestResult.routes,
+    droppedNodes: bestResult.droppedNodes || [],
     totalDistance: bestResult.totalDistance,
     totalDuration: bestResult.totalDuration,
     totalCost: bestResult.totalCost, // Save total cost
@@ -353,21 +398,26 @@ async function runSingleAlgorithm(req, res, context) {
 
   try {
     const startTime = Date.now();
-    const rawRoutes = await Promise.resolve(
+    const solverOutput = await Promise.resolve(
       selectedAlgo.function(vehicles, locations, depot, algorithmOptions)
     );
     const executionTime = Date.now() - startTime;
     console.log(`[Single Run] SUCCESS: ${selectedAlgo.name} finished in ${executionTime}ms.`);
 
-    const routesWithVehicles = assignVehiclesToRoutes(rawRoutes, vehicles);
+    const routes = solverOutput.routes || (Array.isArray(solverOutput) ? solverOutput : []);
+    let droppedNodes = solverOutput.droppedNodes || [];
 
+    // 🚚 Strict Vehicle Assignment
+    const { assignedRoutes, unassignedStops } = assignVehiclesToRoutes(routes, vehicles);
+    droppedNodes = [...droppedNodes, ...unassignedStops];
 
-    const metrics = calculateRouteMetrics(routesWithVehicles, locations, vehicles, depot._id);
+    const metrics = calculateRouteMetrics(assignedRoutes, locations, vehicles, depot._id);
 
     const result = {
       algorithm: selectedAlgo.name,
       algorithmKey: algorithm,
-      routes: routesWithVehicles,
+      routes: assignedRoutes,
+      droppedNodes: droppedNodes,
       executionTime,
       ...metrics
     };
@@ -379,7 +429,8 @@ async function runSingleAlgorithm(req, res, context) {
       locations: locationIds,
       algorithmResults: [result], // Store the single result in the array
       selectedAlgorithm: algorithm,
-      routes: routesWithVehicles,
+      routes: assignedRoutes,
+      droppedNodes: droppedNodes, // Store globally on the optimization as well
       totalDistance: metrics.totalDistance,
       totalDuration: metrics.totalDuration,
       totalCost: metrics.totalCost, // Save total cost

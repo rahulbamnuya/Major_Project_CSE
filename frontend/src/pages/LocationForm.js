@@ -47,6 +47,7 @@ const LocationForm = () => {
     isDepot: false,
     timeWindowStart: '',
     timeWindowEnd: '',
+    road_type: 'STANDARD',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -116,7 +117,7 @@ const LocationForm = () => {
     try {
       setLoading(true);
       const response = await LocationService.get(id);
-      const { name, address, latitude, longitude, demand, isDepot, timeWindowStart, timeWindowEnd } = response;
+      const { name, address, latitude, longitude, demand, isDepot, timeWindowStart, timeWindowEnd, road_type } = response;
       setFormData({
         name: name || '',
         address: address || '',
@@ -126,6 +127,7 @@ const LocationForm = () => {
         isDepot: isDepot || false,
         timeWindowStart: minutesToTime(timeWindowStart),
         timeWindowEnd: minutesToTime(timeWindowEnd),
+        road_type: road_type || 'STANDARD',
       });
       // Trigger map update via effect
       notify('Location loaded', 'success');
@@ -157,7 +159,19 @@ const LocationForm = () => {
         const data = await response.json();
         const address = data.display_name;
         const name = address.split(',')[0];
-        setFormData(prev => ({ ...prev, name, address }));
+        
+        let road_type = 'STANDARD';
+        const osmType = data.type || 'standard';
+        
+        if (['footway', 'path', 'pedestrian', 'residential'].includes(osmType)) {
+            road_type = 'NARROW';
+        } else if (['primary', 'trunk', 'motorway'].includes(osmType)) {
+            road_type = 'WIDE';
+        } else if (data.address && data.address.bridge) {
+            road_type = 'NARROW';
+        }
+
+        setFormData(prev => ({ ...prev, name, address, road_type }));
       }
     } catch (err) {
       console.error('Reverse geocoding failed', err);
@@ -195,6 +209,7 @@ const LocationForm = () => {
         isDepot: formData.isDepot,
         timeWindowStart: timeToMinutes(formData.timeWindowStart),
         timeWindowEnd: timeToMinutes(formData.timeWindowEnd),
+        road_type: formData.road_type,
       };
 
       if (isEditMode) {
@@ -295,6 +310,18 @@ const LocationForm = () => {
                   <div>
                     <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Demand (Units)</label>
                     <input type="number" name="demand" value={formData.demand} onChange={onChange} min="0" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Road/Area Classification (Auto-Detected)</label>
+                    <select name="road_type" value={formData.road_type} onChange={onChange} className="w-full bg-indigo-50/50 dark:bg-slate-900 border border-indigo-200 dark:border-slate-700 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-indigo-800 dark:text-indigo-300">
+                      <option value="WIDE">WIDE (Highway, Primary - All Vehicles)</option>
+                      <option value="STANDARD">STANDARD (Secondary Streets - Medium/Small Vehicles)</option>
+                      <option value="NARROW">NARROW (Residential, Alleys - Small Vans Only)</option>
+                    </select>
+                    <p className="text-xs text-slate-500 mt-2 font-medium">
+                      * Automatically categorized using exact satellite/map data. <strong>If you are unsure of the street size, do not change this.</strong> Trust the Auto-Detection to prevent heavy trucks from getting stuck.
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">

@@ -118,8 +118,8 @@ const LocationSearch = ({ onLocationSelect, map }) => {
   };
 
   return (
-    <div className="location-search-container" ref={searchRef}>
-      <div className="search-input-container">
+    <div className="relative w-full" ref={searchRef}>
+      <div className="flex items-center bg-white dark:bg-slate-900">
         <input
           type="text"
           value={searchTerm}
@@ -128,7 +128,7 @@ const LocationSearch = ({ onLocationSelect, map }) => {
           // Delay blur to allow click on results
           onBlur={() => setTimeout(() => setShowHistory(false), 200)}
           placeholder="Search place (e.g. Indore Zoo)..."
-          className="search-input"
+          className="w-full bg-transparent px-4 py-3 outline-none text-slate-800 dark:text-slate-100 font-medium placeholder-slate-400 dark:placeholder-slate-500"
         />
 
         {searchTerm && (
@@ -144,7 +144,7 @@ const LocationSearch = ({ onLocationSelect, map }) => {
         <button
           onClick={handleSearch}
           disabled={isLoading || !searchTerm.trim()}
-          className="search-button"
+          className="px-4 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
           type="button"
         >
           {isLoading ? <span className="animate-spin inline-block">↻</span> : '🔍'}
@@ -152,7 +152,7 @@ const LocationSearch = ({ onLocationSelect, map }) => {
       </div>
 
       {/* Debug/Status Feedback */}
-      <div className="bg-white/90 backdrop-blur px-3 py-1 rounded-b-lg text-xs text-black font-medium border-x border-b border-slate-200">
+      <div className="bg-slate-50 dark:bg-slate-800/80 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 font-medium border-b border-slate-100 dark:border-slate-700">
         {isLoading ? 'Searching...' : searchResults.length > 0 ? `${searchResults.length} results (Click to select)` : noResults ? 'No results found' : 'Type to search'}
       </div>
 
@@ -174,27 +174,15 @@ const LocationSearch = ({ onLocationSelect, map }) => {
 
       {/* Search Results */}
       {searchResults.length > 0 && (
-        <div className="search-results" style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          right: 0,
-          backgroundColor: 'white',
-          zIndex: 9999,
-          color: 'black',
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-          maxHeight: '300px',
-          overflowY: 'auto'
-        }}>
+        <div className="absolute top-full left-0 right-0 z-[9999] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl rounded-b-xl overflow-y-auto max-h-[300px]">
           {searchResults.map((result, index) => (
             <div
               key={index}
-              className="search-result-item hover:bg-slate-50 border-b border-slate-100 p-3 cursor-pointer"
+              className="hover:bg-blue-50 dark:hover:bg-slate-700 border-b border-slate-100 dark:border-slate-700/50 p-3 cursor-pointer transition-colors"
               onMouseDown={() => handleLocationSelect(result)}
             >
-              <div className="result-name font-bold text-slate-800">{result.display_name.split(',')[0]}</div>
-              <div className="result-address text-xs text-slate-500">{result.display_name}</div>
+              <div className="font-bold text-slate-800 dark:text-white mb-0.5">{result.display_name.split(',')[0]}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{result.display_name}</div>
             </div>
           ))}
         </div>

@@ -226,10 +226,28 @@ const Vehicles = () => {
                       </span>
                     </div>
                     <div className="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl">
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Count</span>
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Quantity</span>
                       <span className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-1">
                         <FaRoute className="text-green-500 text-xs" /> {vehicle.count}
                       </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl mb-2">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-xs font-bold text-slate-400 uppercase">Access Profile</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        vehicle.vehicle_type === 'SMALL' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                        vehicle.vehicle_type === 'MEDIUM' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      }`}>
+                        {vehicle.vehicle_type || 'LARGE'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${vehicle.vehicle_type ? 'border-emerald-200 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:border-emerald-800' : 'border-slate-200 text-slate-400 opacity-50'}`}>WIDE</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${['SMALL', 'MEDIUM'].includes(vehicle.vehicle_type) ? 'border-amber-200 bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:border-amber-800' : 'border-slate-200 text-slate-400 opacity-50'}`}>STANDARD</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${vehicle.vehicle_type === 'SMALL' ? 'border-blue-200 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 'border-slate-200 text-slate-400 opacity-50'}`}>NARROW</span>
                     </div>
                   </div>
                 </div>

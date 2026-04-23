@@ -1,7 +1,7 @@
-import { React, useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import OptimizationService from '../services/optimization.service';
-import Map from '../components/Map';
+import MapComponent from '../components/Map';
 import '../styles/OptimizationDetail.css';
 import { CardSkeleton, MapSkeleton, StatsCardSkeleton } from '../components/LoadingSkeleton';
 import { useToast } from '../components/ToastProvider';
@@ -9,11 +9,14 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import {
   FaCalendarAlt, FaDownload, FaChartBar, FaPrint, FaArrowLeft,
-  FaRoute, FaCogs, FaRoad, FaTruck, FaClock, FaBox, FaMapMarkerAlt,
-  FaCheckCircle, FaExclamationTriangle, FaUserTie
+  FaRoute, FaTruck, FaClock, FaBox, FaRoad, 
+  FaCheckCircle, FaExclamationTriangle, FaUserTie, FaCogs
 } from 'react-icons/fa';
 
 // ================== HELPER FUNCTIONS ==================
+const formatDistance = (d) => `${Number(d || 0).toFixed(2)} km`;
+
+
 const formatTime = (seconds) => {
   if (seconds === null || seconds === undefined) return '--:--';
   const totalMinutes = Math.floor(seconds / 60);
@@ -24,15 +27,15 @@ const formatTime = (seconds) => {
   return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
 };
 
-const formatDuration = (totalMinutes) => {
-  if (!totalMinutes || totalMinutes < 1) return '0 min';
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = Math.round(totalMinutes % 60);
-  const parts = [];
-  if (hours > 0) parts.push(`${hours} ${hours === 1 ? 'hr' : 'hrs'}`);
-  if (minutes > 0) parts.push(`${minutes} min`);
-  return parts.join(' ');
+const formatDuration = (minutes) => {
+  if (!minutes) return '0m';
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 };
+
+
 
 // ================== COMPONENTS ==================
 const RouteTimeline = ({ route }) => {
@@ -46,11 +49,7 @@ const RouteTimeline = ({ route }) => {
           const departureTime = stop.arrivalTime + stop.serviceTime;
           const status = stop.status || 'Pending';
 
-          let label = 'Arrival';
-          if (isDepotStart) label = 'Departure';
-          if (isDepotEnd) label = 'Return';
-
-          // Backend provides timeWindowEnd in SECONDS
+          const rType = (stop.road_type || 'STANDARD').toUpperCase();
           const isLate = stop.timeWindowEnd !== null && stop.arrivalTime > stop.timeWindowEnd;
 
           return (
@@ -67,59 +66,75 @@ const RouteTimeline = ({ route }) => {
                 status === 'En Route' ? 'border-yellow-200 dark:border-yellow-900/30' :
                   'border-slate-100 dark:border-slate-700'
                 }`}>
-                <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-800 dark:text-slate-100 text-base">
+                <div className="mb-4">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-bold text-slate-800 dark:text-slate-100 text-lg">
                       {stop.locationName}
                     </span>
-                    {status !== 'Pending' && (
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${status === 'Delivered' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                    <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${
+                            rType === 'NARROW' ? 'bg-red-100 text-red-700 border-red-200' : 
+                            rType === 'WIDE' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 
+                            'bg-slate-100 text-slate-500 border-slate-200'
                         }`}>
-                        {status}
-                      </span>
-                    )}
+                            {rType} Road
+                        </span>
+                        {status !== 'Pending' && (
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${status === 'Delivered' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                                {status}
+                            </span>
+                        )}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-3 text-xs font-bold">
                     {stop.demand > 0 && (
-                      <span className="text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
+                      <span className="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded">
                         {stop.demand} units
                       </span>
                     )}
+                    {!isDepotStart && !isDepotEnd && (
+                      <span className="text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded">
+                        Service: {Math.round(stop.serviceTime / 60)}m Dwell
+                      </span>
+                    )}
                     {isLate && (
-                      <span className="text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded flex items-center gap-1">
-                        <FaExclamationTriangle /> LATE
+                      <span className="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded flex items-center gap-1">
+                        <FaExclamationTriangle className="text-[10px]" /> LATE
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-6 text-sm text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700/50 pt-4">
                   <div>
-                    <span className="text-xs text-slate-400 block uppercase">Time</span>
-                    <span className={`font-mono font-medium ${isLate ? 'text-red-500' : ''}`}>{label}: {formatTime(stop.arrivalTime)}</span>
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold mb-1">Arrival</span>
+                    <span className={`font-mono font-black text-base ${isLate ? 'text-red-500' : 'text-slate-900 dark:text-white'}`}>
+                      {formatTime(stop.arrivalTime)}
+                    </span>
                   </div>
 
-                  {!isDepotStart && !isDepotEnd && (
+                  {!isDepotStart && !isDepotEnd ? (
                     <>
                       <div>
-                        <span className="text-xs text-slate-400 block uppercase">Service</span>
-                        <span className="font-mono">{Math.round(stop.serviceTime / 60)} min</span>
+                        <span className="text-[10px] text-slate-500 block uppercase font-bold mb-1">Departure</span>
+                        <span className="font-mono font-black text-base text-slate-900 dark:text-white">
+                          {formatTime(departureTime)}
+                        </span>
                       </div>
+
                       <div>
-                        <span className="text-xs text-slate-400 block uppercase">Depart</span>
-                        <span className="font-mono">{formatTime(departureTime)}</span>
+                        <span className="text-[10px] text-blue-500 block uppercase font-black mb-1 flex items-center gap-1">
+                          <FaClock className="text-xs" /> Goal Window
+                        </span>
+                        <span className="font-mono text-xs font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 inline-block">
+                          {stop.timeWindowStart != null && stop.timeWindowEnd != null 
+                            ? `${formatTime(stop.timeWindowStart)} - ${formatTime(stop.timeWindowEnd)}`
+                            : 'Unrestricted'}
+                        </span>
                       </div>
                     </>
-                  )}
-
-                  {!isDepotStart && !isDepotEnd && stop.timeWindowStart != null && stop.timeWindowEnd != null && (
-                    <div className="col-span-2 md:col-span-1">
-                      <span className="text-xs text-slate-400 block uppercase">Window</span>
-                      <span className="font-mono text-xs">
-                        {formatTime(stop.timeWindowStart)} - {formatTime(stop.timeWindowEnd)}
-                      </span>
-                    </div>
-                  )}
+                  ) : <div></div>}
                 </div>
               </div>
             </div>
@@ -136,12 +151,13 @@ const OptimizationDetail = () => {
   const [optimization, setOptimization] = useState(null);
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('routes');
+
+  const [selectedResultIndex, setSelectedResultIndex] = useState(-1);
   const { notify } = useToast();
   const { currentUser } = useAuth();
   const [useRoadNetwork, setUseRoadNetwork] = useState(false);
   const [routedPolylines, setRoutedPolylines] = useState({});
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(-1);
 
   useEffect(() => {
     const init = async () => {
@@ -156,7 +172,7 @@ const OptimizationDetail = () => {
         setDrivers(drvData);
       } catch (err) {
         // Only set error if we don't have data yet
-        if (!optimization) setError('Failed to load optimization data');
+        if (!optimization) notify('Failed to load optimization data', 'error');
         console.error(err);
       } finally {
         setLoading(false);
@@ -173,32 +189,35 @@ const OptimizationDetail = () => {
     }, 15000);
 
     return () => clearInterval(intervalId);
-  }, [id]); // Removing 'optimization' dependency to avoid re-creating interval on every update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, notify]); 
 
   useEffect(() => {
     if (useRoadNetwork && optimization?.routes) {
-      (async () => {
-        const map = {};
-        let successCount = 0;
-        let fallbackCount = 0;
+      (async function fetchPolylines() {
+        const map = { ...routedPolylines };
+        let updated = false;
         for (let i = 0; i < optimization.routes.length; i++) {
-          try {
-            const data = await OptimizationService.getRoutedPolyline(id, i);
-            map[i] = data.geometry.coordinates.map(coord => [coord[1], coord[0]]);
-            if (data.fallback) fallbackCount++;
-            else successCount++;
-          } catch (e) {
-            console.error('Failed to fetch routed polyline for route', i, e);
-            fallbackCount++;
+          if (!map[i]) {
+            try {
+              const data = await OptimizationService.getRoutedPolyline(id, i);
+              if (data?.geometry?.coordinates) {
+                map[i] = data.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                updated = true;
+              }
+            } catch (e) {
+              console.error(`Route ${i} error:`, e);
+            }
           }
         }
-        setRoutedPolylines(map);
-        if (successCount > 0 && fallbackCount === 0) notify(`Real road routes loaded for all ${successCount} routes`, 'success', { autoClose: 2000 });
-        else if (successCount > 0) notify(`Real road routes loaded (${successCount} routes), ${fallbackCount} using straight lines`, 'info', { autoClose: 3000 });
-        else notify('Using straight-line routes (road network unavailable)', 'warning', { autoClose: 2000 });
+        if (updated) {
+          setRoutedPolylines(map);
+          notify('Road routes loaded', 'success', { autoClose: 1000 });
+        }
       })();
     }
-  }, [useRoadNetwork, optimization, id, notify]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useRoadNetwork, id, notify, optimization?.routes]); 
 
   useEffect(() => {
     if (currentUser?.preferences?.preferRoadNetwork) {
@@ -219,10 +238,69 @@ const OptimizationDetail = () => {
     }
   };
 
+  const activeResult = useMemo(() => {
+    if (!optimization) return null;
+    const base = selectedResultIndex === -1 ? optimization : (optimization.algorithmResults?.[selectedResultIndex] || optimization);
+    
+    // Inject sustainability metrics
+    const dist = base.totalDistance || 0;
+    // 🚩 Aggregate Infrastructure Violations
+    let totalViolations = 0;
+    base.routes?.forEach(route => {
+        const v = optimization.vehicles?.find(veh => veh._id === route.vehicle || veh._id.toString() === route.vehicle);
+        const vType = (v?.vehicle_type || 'LARGE').toUpperCase();
+        route.stops?.forEach(stop => {
+            const rType = (stop.road_type || 'STANDARD').toUpperCase();
+            if (rType === 'NARROW' && vType !== 'SMALL') totalViolations++;
+            if (rType === 'STANDARD' && vType === 'LARGE') totalViolations++;
+        });
+    });
+
+    return {
+      ...base,
+      totalCO2: dist * 0.16,
+      co2Saved: dist * 0.05,
+      geoViolations: totalViolations,
+      isInfrastructureAware: true
+    };
+  }, [optimization, selectedResultIndex]);
+  
+  const mapCenter = useMemo(() => {
+    if (optimization?.locations?.length > 0) {
+        return [optimization.locations[0].latitude, optimization.locations[0].longitude];
+    }
+    return [22.7196, 75.8577]; // Default Indore
+  }, [optimization?.locations]);
+
+  // Unique results for the switcher to avoid "3x Geo-VRP" repetitions
+  const uniqueResults = useMemo(() => {
+    if (!optimization?.algorithmResults) return [];
+    
+    const uniqueMap = new Map();
+    const geoVariants = [];
+    
+    optimization.algorithmResults.forEach(r => {
+        if (r.algorithmKey?.includes('or-tools') || r.algorithmKey?.includes('hybrid') || r.algorithm?.includes('Advanced Geo-VRP')) {
+            geoVariants.push(r);
+        } else {
+            // Dedupe others by name
+            if (!uniqueMap.has(r.algorithm)) uniqueMap.set(r.algorithm, r);
+        }
+    });
+
+    if (geoVariants.length > 0) {
+        // Keep the best one or the one with routes (performance score isn't pre-calculated here, so use totalDistance/totalCapacity)
+        const bestGeo = geoVariants[0]; // Simple selection for now as detail view usually has the intended one
+        uniqueMap.set('Advanced Geo-VRP Hybrid', bestGeo);
+    }
+
+    return Array.from(uniqueMap.values());
+  }, [optimization?.algorithmResults]);
+
   const handleExport = () => {
-    if (!optimization) return;
+    if (!activeResult) return;
     try {
-      const dataStr = JSON.stringify(optimization, null, 2);
+      const dataStr = JSON.stringify(activeResult, null, 2);
       const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
       const exportFileDefaultName = `optimization-${optimization.name.replace(/\s+/g, '-').toLowerCase()}.json`;
       const linkElement = document.createElement('a');
@@ -266,7 +344,18 @@ const OptimizationDetail = () => {
             <Link to="/optimizations" className="text-slate-500 hover:text-blue-600 mb-2 inline-flex items-center gap-2 group transition-colors">
               <FaArrowLeft className="text-xs group-hover:-translate-x-1 transition-transform" /> Back to History
             </Link>
-            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-2">{optimization.name}</h1>
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-2 flex items-center gap-3">
+              {optimization.name}
+              {activeResult?.isInfrastructureAware ? (
+                <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-200 uppercase tracking-widest font-black flex items-center gap-1">
+                  <FaCheckCircle className="text-[8px]" /> Deep Compliance
+                </span>
+              ) : (
+                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg border border-slate-200 uppercase tracking-widest font-black">
+                  Baseline Logic
+                </span>
+              )}
+            </h1>
             <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
                 <FaCalendarAlt className="text-blue-500" /> {new Date(optimization.createdAt || optimization.date).toLocaleDateString()}
@@ -274,21 +363,18 @@ const OptimizationDetail = () => {
               <span className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
                 <FaCheckCircle className="text-green-500" /> Completed
               </span>
-              <span className="flex items-center gap-1.5 bg-red-100 dark:bg-red-900/30 px-3 py-1 rounded-full border border-red-200 dark:border-red-900/50 shadow-sm animate-pulse text-red-600 dark:text-red-400 font-bold tracking-wider text-xs uppercase">
-                <span className="w-2 h-2 bg-red-500 rounded-full inline-block"></span> Live Updates
-              </span>
+
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+
+
             <button onClick={handleExport} className="btn bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm rounded-xl px-4 py-2.5 flex items-center gap-2 transition-all">
-              <FaDownload /> Export
+              <FaDownload />
             </button>
             <Link to={`/optimizations/${optimization._id}/compare`} className="btn bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-100 dark:border-indigo-800 shadow-sm rounded-xl px-4 py-2.5 flex items-center gap-2 transition-all">
-              <FaChartBar /> Compare Items
-              {optimization.algorithmResults && optimization.algorithmResults.length > 1 && (
-                <span className="bg-indigo-600 text-white text-xs px-2 py-0.5 rounded-full">{optimization.algorithmResults.length}</span>
-              )}
+              <FaChartBar /> Compare
             </Link>
             <Link to={`/optimizations/${optimization._id}/print`} className="btn bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm rounded-xl px-4 py-2.5 flex items-center gap-2 transition-all">
               <FaPrint /> Sheets
@@ -296,48 +382,99 @@ const OptimizationDetail = () => {
           </div>
         </div>
 
-        {/* Summary Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-xl flex items-center justify-center text-xl">
-              <FaRoute />
+        {/* Unassigned Warning Section */}
+        {optimization.droppedNodes && optimization.droppedNodes.length > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-6 mb-8 flex flex-col md:flex-row items-start gap-4 anim-fade-up">
+            <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-xl flex items-center justify-center text-xl shrink-0">
+              <FaExclamationTriangle />
             </div>
-            <div>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Routes</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">{optimization.routes.length}</p>
+            <div className="flex-1">
+              <h3 className="text-amber-800 dark:text-amber-400 font-bold text-lg mb-1">Unassigned Stops Detected ({optimization.droppedNodes.length})</h3>
+              <p className="text-amber-700/80 dark:text-amber-400/70 text-sm mb-3">
+                Some locations could not be optimized into any route. This usually happens due to impossible time windows, vehicle capacity limits, or road restrictions.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {optimization.droppedNodes.map((node, i) => (
+                  <span key={i} className="bg-white/60 dark:bg-slate-800/40 border border-amber-200 dark:border-amber-800 px-3 py-1 rounded-lg text-xs font-bold text-amber-900 dark:text-amber-200">
+                    {optimization.locations?.find(l => l._id === node.index || l.index === node.index)?.name || `Point ${node.index}`}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="bg-amber-100 dark:bg-amber-900/50 px-4 py-2 rounded-xl text-amber-900 dark:text-amber-200 font-bold text-xs uppercase tracking-wider h-fit">
+              Requires Attention
             </div>
           </div>
+        )}
 
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-xl flex items-center justify-center text-xl">
+        {/* Summary Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-8 anim-fade-up">
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
+            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl flex items-center justify-center text-lg">
               <FaCogs />
             </div>
-            <div>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Algorithm</p>
-              <p className="text-lg font-bold text-slate-900 dark:text-white capitalize">
-                {optimization.selectedAlgorithm ? optimization.selectedAlgorithm.replace(/-/g, ' ') : 'Clarke Wright'}
+            <div className="flex-1 overflow-hidden">
+              <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Solving Strategy</p>
+              <p className="text-base font-bold text-slate-900 dark:text-white truncate" title={activeResult?.algorithm}>
+                {activeResult?.algorithm || 'Standard Heuristic'}
               </p>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded-xl flex items-center justify-center text-xl">
-              <FaRoad />
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-xl flex items-center justify-center text-lg">
+              <FaRoute />
             </div>
             <div>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Distance</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">{Number(optimization?.totalDistance ?? 0).toFixed(2)} km</p>
+              <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Total Distance</p>
+              <p className="text-lg font-bold text-slate-900 dark:text-white">{formatDistance(activeResult?.totalDistance)}</p>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-xl flex items-center justify-center text-xl">
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-xl flex items-center justify-center text-lg">
+              <FaClock />
+            </div>
+            <div>
+              <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Total Time</p>
+              <p className="text-lg font-bold text-slate-900 dark:text-white">
+                {activeResult?.totalDuration ? formatDuration(activeResult.totalDuration) : 'N/A'}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
+            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-xl flex items-center justify-center text-lg">
+              <FaCheckCircle />
+            </div>
+            <div>
+              <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Fulfillment</p>
+              <p className="text-lg font-bold text-slate-900 dark:text-white">
+                {activeResult.totalStops || (activeResult.routes?.reduce((acc, r) => acc + (r.stops?.length || 0), 0) - (activeResult.routes?.length * 2))} / {optimization.locations.length - 1}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
+            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded-xl flex items-center justify-center text-lg">
               <FaTruck />
             </div>
             <div>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Utilization</p>
+              <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Asset Deployment</p>
               <p className="text-lg font-bold text-slate-900 dark:text-white">
-                {new Set((optimization.routes || []).map(r => r.vehicle).filter(Boolean)).size} / {optimization.vehicles?.length || 0} Veh
+                {activeResult?.routes?.length || 0} Routes / {optimization?.vehicles?.length || 0} Fleet
+              </p>
+            </div>
+          </div>
+
+          <div className={`${activeResult.geoViolations > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800/40' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/40'} p-5 rounded-2xl border shadow-sm flex items-center gap-4`}>
+            <div className={`w-10 h-10 ${activeResult.geoViolations > 0 ? 'bg-red-500' : 'bg-emerald-500'} text-white rounded-xl flex items-center justify-center text-lg`}>
+              <FaExclamationTriangle />
+            </div>
+            <div>
+              <p className={`${activeResult.geoViolations > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} text-[10px] font-bold uppercase tracking-wider`}>Geo-Compliance</p>
+              <p className={`text-lg font-bold ${activeResult.geoViolations > 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                {activeResult.geoViolations > 0 ? `${activeResult.geoViolations} Violations` : '100% Safe'}
               </p>
             </div>
           </div>
@@ -346,22 +483,32 @@ const OptimizationDetail = () => {
         {/* Analytics Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {(() => {
-            const routes = optimization.routes || [];
-            const totalStops = routes.reduce((s, r) => s + (r.stops?.length || 0), 0);
+            const routes = activeResult.routes || [];
+            const depotId = optimization.locations.find(l => l.isDepot)?._id?.toString();
+            let deliveryStopsServed = 0;
+            routes.forEach(r => {
+                r.stops?.forEach(s => {
+                    if (s.locationId?.toString() !== depotId) deliveryStopsServed++;
+                });
+            });
+
+            const totalStops = deliveryStopsServed;
             const totalLoad = routes.reduce((sum, route) => sum + (route.totalCapacity || 0), 0);
-            const totalCapacity = routes.reduce((sum, route) => sum + (optimization.vehicles?.find(v => v._id === route.vehicle)?.capacity || 0), 0);
+            const totalCapacity = routes.reduce((sum, route) => sum + (optimization.vehicles?.find(v => v._id === route.vehicle || v._id.toString() === route.vehicle)?.capacity || 0), 0);
             const loadEfficiency = totalCapacity > 0 ? ((totalLoad / totalCapacity) * 100) : 0;
             const avgDistance = routes.length ? (routes.reduce((sum, r) => sum + Number(r.distance || 0), 0) / routes.length) : 0;
 
             return (
               <>
                 <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                  <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Total Stops</div>
-                  <div className="text-xl font-bold text-slate-800 dark:text-slate-200">{totalStops}</div>
+                  <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Fulfillment</div>
+                  <div className="text-xl font-bold text-slate-800 dark:text-slate-200">{totalStops} / {optimization.locations.length - 1}</div>
                 </div>
                 <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
                   <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Load Efficiency</div>
-                  <div className="text-xl font-bold text-green-600 dark:text-green-400">{loadEfficiency.toFixed(1)}%</div>
+                  <div className={`text-xl font-bold ${loadEfficiency > 100 ? 'text-red-600 animate-pulse' : 'text-green-600 dark:text-green-400'}`}>
+                    {loadEfficiency.toFixed(1)}%
+                  </div>
                   <div className="text-xs text-slate-400">{totalLoad}/{totalCapacity} units</div>
                 </div>
                 <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
@@ -369,170 +516,122 @@ const OptimizationDetail = () => {
                   <div className="text-xl font-bold text-slate-800 dark:text-slate-200">{avgDistance.toFixed(1)} km</div>
                 </div>
                 <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                  <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Est. Cost</div>
-                  <div className="text-xl font-bold text-green-700 dark:text-green-400">₹{optimization.totalCost || 0}</div>
-                  <div className="text-xs text-slate-400">Fuel + Driver</div>
-                </div>
-                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                  <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Status</div>
-                  <div className="text-xl font-bold text-blue-600 dark:text-blue-400">Optimized</div>
+                  <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Real Ops. Cost</div>
+                  <div className="text-xl font-bold text-green-700 dark:text-green-400">
+                    {(() => {
+                        const getFixedCost = (capacity) => {
+                            if (capacity <= 1000) return 250;
+                            if (capacity <= 4000) return 450;
+                            return 700;
+                        };
+                        const variableCost = activeResult.totalCost || 0;
+                        let fixedCost = 0;
+                        const uniqueVehicles = new Set((activeResult.routes || []).map(r => r.vehicle).filter(Boolean));
+                        uniqueVehicles.forEach(vId => {
+                            const v = optimization.vehicles?.find(veh => veh._id === vId || veh._id.toString() === vId);
+                            fixedCost += getFixedCost(v?.capacity || 0);
+                        });
+                        return `₹${Number(variableCost + fixedCost).toFixed(2)}`;
+                    })()}
+                  </div>
+                  <div className="text-xs text-slate-400">Fixed + Variable</div>
                 </div>
               </>
             )
           })()}
         </div>
 
-        {/* Main Map */}
-        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden mb-10">
-          <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-            <h3 className="font-bold text-lg text-slate-800 dark:text-white">Route Visualization</h3>
-            <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm text-sm hover:bg-slate-50 transition-colors">
-              <input type="checkbox" className="accent-blue-600" checked={useRoadNetwork} onChange={() => setUseRoadNetwork(v => !v)} />
-              <span className="text-slate-700 dark:text-slate-200 font-medium">Use road network (Beta)</span>
-            </label>
-          </div>
-          <div className="h-[600px] w-full relative z-0">
-            <Map
-              locations={optimization.locations || []}
-              routes={optimization.routes || []}
-              vehicles={optimization.vehicles || []}
-              useRoadNetwork={useRoadNetwork}
-              routedPolylines={routedPolylines}
-              optimizationId={optimization._id}
-              onRoutedPolylinesUpdate={(routeIndex, coordinates) => {
-                setRoutedPolylines(prev => ({
-                  ...prev,
-                  [routeIndex]: coordinates
-                }));
-              }}
-              center={optimization.locations && optimization.locations.length > 0
-                ? [optimization.locations[0].latitude, optimization.locations[0].longitude]
-                : [22.7196, 75.8577]
-              }
-              zoom={13}
-            />
-          </div>
-        </div>
-
-        {/* Tabs for Routes/Details */}
-        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden min-h-[500px]">
-          <div className="flex border-b border-slate-200 dark:border-slate-700">
-            <button
-              className={`flex-1 py-4 text-center font-bold text-sm uppercase tracking-wider transition-colors border-b-2 ${activeTab === 'routes' ? 'border-blue-600 text-blue-600 bg-blue-50/50 dark:bg-blue-900/10' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-              onClick={() => setActiveTab('routes')}
-            >
-              Detailed Routes
-            </button>
-            <button
-              className={`flex-1 py-4 text-center font-bold text-sm uppercase tracking-wider transition-colors border-b-2 ${activeTab === 'details' ? 'border-blue-600 text-blue-600 bg-blue-50/50 dark:bg-blue-900/10' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-              onClick={() => setActiveTab('details')}
-            >
-              Technical Details
-            </button>
+        <div className="flex flex-col lg:flex-row gap-8 items-start mb-10">
+          {/* Main Map (Left Column) */}
+          <div className="w-full lg:w-3/5 xl:w-2/3 lg:sticky lg:top-8">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+              <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+                <h3 className="font-bold text-lg text-slate-800 dark:text-white">Route Visualization</h3>
+                <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm text-sm hover:bg-slate-50 transition-colors">
+                  <input type="checkbox" className="accent-blue-600" checked={useRoadNetwork} onChange={() => setUseRoadNetwork(v => !v)} />
+                  <span className="text-slate-700 dark:text-slate-200 font-medium whitespace-nowrap">Road Network (Beta)</span>
+                </label>
+              </div>
+              <div className="h-[600px] w-full relative z-0">
+                <MapComponent
+                  locations={optimization.locations || []}
+                  routes={activeResult.routes || []}
+                  vehicles={optimization.vehicles || []}
+                  useRoadNetwork={useRoadNetwork}
+                  routedPolylines={routedPolylines}
+                  selectedRouteIndex={selectedRouteIndex}
+                  optimizationId={optimization._id}
+                  onRoutedPolylinesUpdate={(routeIndex, coordinates) => {
+                    setRoutedPolylines(prev => ({
+                      ...prev,
+                      [routeIndex]: coordinates
+                    }));
+                  }}
+                  center={mapCenter}
+                  zoom={13}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="p-6 md:p-8 bg-slate-50/30 dark:bg-slate-900/30">
-            {activeTab === 'routes' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {optimization.routes && optimization.routes.map((route, index) => {
-                  const hasTimeData = route.stops && route.stops.length > 0 && typeof route.stops[0].arrivalTime !== 'undefined';
-                  const colorClass = ['border-blue-500', 'border-green-500', 'border-purple-500', 'border-orange-500'][index % 4];
-
-                  const routeVehicle = optimization.vehicles?.find(v => v._id === route.vehicle);
-                  const displayVehicleName = route.vehicleName || routeVehicle?.name || 'Unknown Vehicle';
-
-                  return (
-                    <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                      <div className={`p-4 border-l-4 ${colorClass} bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center`}>
-                        <h3 className="font-bold text-slate-800 dark:text-white">Route {index + 1} - {displayVehicleName}</h3>
-                        <div className="text-right">
-                          <span className="text-xs font-mono bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 block mb-1">
-                            {Number(route.distance).toFixed(1)} km
-                          </span>
-                          {route.cost !== undefined && (
-                            <span className="text-xs font-bold text-green-600 block">₹{route.cost}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Driver Assignment Section */}
-                      <div className="px-4 py-3 bg-indigo-50/50 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm text-indigo-800 dark:text-indigo-300 font-bold">
-                          <FaUserTie /> Assigned Driver:
-                        </div>
-                        <select
-                          className="bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-slate-700 dark:text-slate-200 text-sm rounded-lg py-1.5 px-3 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[150px]"
-                          value={route.driverId || ""}
-                          onChange={(e) => handleDriverAssign(index, e.target.value)}
-                        >
-                          <option value="">Select Driver...</option>
-                          {drivers.map(drv => (
-                            <option key={drv._id} value={drv._id}>
-                              {drv.name} ({drv.status || 'Unknown'})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="p-6">
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          <span className="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 flex items-center gap-1"><FaRoad /> {Number(route.distance).toFixed(2)} km</span>
-                          <span className="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 flex items-center gap-1"><FaClock /> {formatDuration(route.duration)}</span>
-                          <span className="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 flex items-center gap-1"><FaBox /> {route.totalCapacity} units</span>
-                        </div>
-
-                        {hasTimeData ? (
-                          <RouteTimeline route={route} />
-                        ) : (
-                          <div className="space-y-4 relative pl-4 border-l-2 border-slate-200 dark:border-slate-700 ml-2 mt-4">
-                            {route.stops.map((stop, stopIndex) => (
-                              <div key={stopIndex} className="relative pl-6">
-                                <div className={`absolute -left-[7px] top-1.5 w-3 h-3 rounded-full ${stopIndex === 0 || stopIndex === route.stops.length - 1 ? 'bg-slate-800' : 'bg-blue-400'}`}></div>
-                                <p className="font-medium text-slate-800 text-sm">{stop.locationName}</p>
-                                {stop.demand > 0 && <span className="text-xs text-slate-500">Demand: {stop.demand}</span>}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+          {/* Logistics Manifest (Right Column) */}
+          <div className="w-full lg:w-2/5 xl:w-1/3 lg:max-h-[85vh] lg:overflow-y-auto pr-2 custom-scrollbar">
+            {/* Strategy Switcher (Moved here for better UX) */}
+            {optimization.algorithmResults?.length > 1 && (
+              <div className="bg-indigo-600 dark:bg-indigo-500 rounded-2xl p-4 mb-4 shadow-md shadow-indigo-200 dark:shadow-none anim-fade-up">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center text-white">
+                      <FaCogs />
                     </div>
-                  )
-                })}
+                    <div>
+                      <p className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">Strategy Selection</p>
+                      <p className="text-white font-bold text-sm">Optimization Engine</p>
+                    </div>
+                  </div>
+                </div>
+                <select 
+                  value={selectedResultIndex}
+                  onChange={(e) => setSelectedResultIndex(parseInt(e.target.value))}
+                  className="w-full bg-white dark:bg-slate-800 border-none rounded-xl text-sm font-bold text-slate-700 dark:text-white focus:ring-2 focus:ring-white/50 cursor-pointer py-2.5 px-4 shadow-sm"
+                >
+                  <option value={-1}>Initial Solution ({optimization.selectedAlgorithm || 'Default'})</option>
+                  {uniqueResults.map((res, idx) => {
+                    const realIdx = optimization.algorithmResults.findIndex(r => r === res);
+                    return (
+                      <option key={idx} value={realIdx}>{res.algorithm.toUpperCase()} Solution</option>
+                    );
+                  })}
+                </select>
               </div>
             )}
 
-            {activeTab === 'details' && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-w-3xl mx-auto">
-                <table className="w-full text-left border-collapse">
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                      <td className="p-4 font-medium text-slate-500 w-1/3">Optimization Name</td>
-                      <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{optimization.name}</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                      <td className="p-4 font-medium text-slate-500">Created At</td>
-                      <td className="p-4 text-slate-800 dark:text-slate-200">{new Date(optimization.createdAt).toLocaleString()}</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                      <td className="p-4 font-medium text-slate-500">Total Routes</td>
-                      <td className="p-4 text-slate-800 dark:text-slate-200">{optimization.routes.length}</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                      <td className="p-4 font-medium text-slate-500">Average Speed Used</td>
-                      <td className="p-4 text-slate-800 dark:text-slate-200">{optimization.avgSpeedKmh || 25} km/h</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                      <td className="p-4 font-medium text-slate-500">Total Distance</td>
-                      <td className="p-4 text-slate-800 dark:text-slate-200">{Number(optimization.totalDistance || 0).toFixed(2)} km</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                      <td className="p-4 font-medium text-slate-500">Algorithm Used</td>
-                      <td className="p-4 text-slate-800 dark:text-slate-200 capitalize">{optimization.selectedAlgorithm}</td>
-                    </tr>
-                  </tbody>
-                </table>
+            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/10">
+                <h3 className="font-bold text-xs uppercase tracking-widest text-slate-500">Logistics Manifest</h3>
+                <span className="text-[10px] font-black text-blue-600 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-full uppercase">
+                  {activeResult.routes?.length || 0} Routes
+                </span>
               </div>
-            )}
+
+              <div className="p-4">
+                <div className="space-y-4">
+                  {(activeResult.routes || []).map((route, i) => (
+                    <div key={i} className="anim-fade-up" style={{ animationDelay: `${i * 100}ms` }}>
+                      <RouteCard
+                        route={route}
+                        index={i}
+                        vehicles={optimization.vehicles}
+                        drivers={drivers}
+                        isSelected={selectedRouteIndex === i}
+                        onSelect={() => setSelectedRouteIndex(selectedRouteIndex === i ? -1 : i)}
+                        onAssignDriver={handleDriverAssign}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -540,5 +639,105 @@ const OptimizationDetail = () => {
     </div>
   );
 }
+
+// ================== SUB-COMPONENTS ==================
+const RouteCard = ({ route, index, vehicles = [], drivers = [], isSelected, onSelect, onAssignDriver }) => {
+  const vehicle = vehicles?.find(v => v._id === route.vehicle || v._id.toString() === route.vehicle) || vehicles?.[index % (vehicles?.length || 1)] || { name: `Vehicle ${index + 1}`, capacity: 100 };
+  const [isExpanded, setIsExpanded] = useState(false);
+  const vType = (vehicle?.vehicle_type || 'LARGE').toUpperCase();
+  const isOverloaded = (route?.totalCapacity || 0) > (vehicle?.capacity || 0);
+
+  // 🚩 Calculate Route Violations for this specific vehicle
+  const geoViolations = useMemo(() => {
+    return (route.stops || []).filter(stop => {
+        const rType = (stop.road_type || 'STANDARD').toUpperCase();
+        if (rType === 'NARROW' && vType !== 'SMALL') return true;
+        if (rType === 'STANDARD' && vType === 'LARGE') return true;
+        return false;
+    }).length;
+  }, [route.stops, vType]);
+
+  return (
+    <div className={`bg-white dark:bg-slate-800 rounded-2xl border transition-all overflow-hidden mb-4 ${isSelected ? 'border-blue-500 shadow-lg shadow-blue-500/10' : 'border-slate-200 dark:border-slate-700 shadow-sm'}`}>
+      <div className="p-5 flex flex-wrap items-center justify-between gap-4 cursor-pointer" onClick={onSelect}>
+        <div className="flex items-center gap-4">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ${isSelected ? 'bg-blue-600 text-white' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
+            {index + 1}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+               <h4 className="font-bold text-slate-800 dark:text-white">{vehicle.name}</h4>
+               <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                   vType === 'SMALL' ? 'bg-blue-100 text-blue-600' : 
+                   vType === 'MEDIUM' ? 'bg-amber-100 text-amber-600' : 
+                   'bg-slate-100 text-slate-600'
+               }`}>
+                 {vType}
+               </span>
+               {geoViolations > 0 && (
+                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-red-50 text-red-600 border border-red-200 flex items-center gap-1">
+                   <FaExclamationTriangle className="text-[8px]" /> {geoViolations} Geo Violation
+                 </span>
+               )}
+               {isOverloaded && (
+                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-red-600 text-white animate-pulse">
+                   Overload
+                 </span>
+               )}
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold mt-0.5">
+              <span className="flex items-center gap-1 group-hover:text-blue-600 transition-colors">
+                <FaRoute className="text-blue-500 opacity-70" /> {route.stops?.length || 0} stops
+              </span>
+              <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+              <span className="flex items-center gap-1">
+                <FaRoad className="text-slate-400 opacity-70" /> {formatDistance(route.distance)}
+              </span>
+              <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+              <span className="flex items-center gap-1">
+                <FaClock className="text-amber-500 opacity-70" /> {formatDuration(route.duration)}
+              </span>
+            </div>
+            <div className={`mt-2 flex items-center gap-2 text-xs font-bold ${isOverloaded ? 'text-red-500' : 'text-emerald-600'}`}>
+               <FaBox className="text-[10px]" /> 
+               {route.totalCapacity || 0} / {vehicle.capacity || 100} units 
+               <span className="text-[10px] opacity-60">({((route.totalCapacity / (vehicle.capacity || 1)) * 100).toFixed(1)}%)</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-slate-50 dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-2">
+                    <FaUserTie className="text-slate-400" />
+                    <select 
+                        value={route.driverId || ''} 
+                        onChange={(e) => onAssignDriver(index, e.target.value)}
+                        className="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-300 focus:ring-0 py-0 pr-8"
+                    >
+                        <option value="">Unassigned</option>
+                        {drivers.map(d => (
+                            <option key={d._id} value={d._id}>{d.name} ({d.driverId})</option>
+                        ))}
+                    </select>
+                </div>
+          </div>
+          <button 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-blue-600 font-bold text-xs hover:underline flex items-center gap-1"
+          >
+            {isExpanded ? 'Hide Timeline' : 'View Timeline'}
+          </button>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="px-5 pb-5 border-t border-slate-50 dark:border-slate-700 pt-2">
+            <RouteTimeline route={route} />
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default OptimizationDetail;

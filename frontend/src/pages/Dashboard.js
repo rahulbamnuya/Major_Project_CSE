@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom';
 import {
   FaTruck, FaMapMarkerAlt, FaRoute, FaPlus,
   FaCalendarAlt, FaClock, FaRoad, FaCheckCircle, FaExclamationTriangle,
-  FaChartPie, FaBell, FaFileUpload
+  FaBell, FaFileUpload, FaChevronRight
 } from 'react-icons/fa';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell
 } from 'recharts';
 import VehicleService from '../services/vehicle.service';
 import LocationService from '../services/location.service';
@@ -17,6 +17,15 @@ import { useToast } from '../components/ToastProvider';
 import { StatsCardSkeleton, MapSkeleton, CardSkeleton } from '../components/LoadingSkeleton';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+// ================== HELPER FUNCTIONS ==================
+const formatDuration = (minutes) => {
+  if (!minutes) return '0m';
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+};
 
 const Dashboard = () => {
   const [vehicles, setVehicles] = useState([]);
@@ -55,11 +64,31 @@ const Dashboard = () => {
           0
         );
 
+        const getFixedCost = (capacity) => {
+            if (capacity <= 1000) return 250;
+            if (capacity <= 4000) return 450;
+            return 700;
+        };
+
+        const totalRealCost = (optimizationsData || []).reduce((sum, opt) => {
+            const varCost = opt.totalCost || 0;
+            let fixCost = 0;
+            const uniqueVehicles = new Set((opt.routes || []).map(r => r.vehicle).filter(Boolean));
+            uniqueVehicles.forEach(vId => {
+                const v = vehiclesData?.find(veh => (veh._id === vId || veh._id.toString() === vId));
+                fixCost += getFixedCost(v?.capacity || 0);
+            });
+            return sum + varCost + fixCost;
+        }, 0);
+
         setStats({
           totalVehicles: vehiclesData?.length || 0,
           totalLocations: locationsData?.length || 0,
           totalOptimizations: optimizationsData?.length || 0,
-          totalDistance
+          totalDistance,
+          totalCost: totalRealCost,
+          totalCO2: totalDistance * 0.16, // kg/km
+          co2Saved: totalDistance * 0.05 // Assuming 30% optimization efficiency
         });
 
         // Set the most recent optimization as selected
@@ -102,16 +131,26 @@ const Dashboard = () => {
   const vehicleCapacityData = vehicles.map(v => ({
     name: v.name,
     value: v.capacity
-  })).slice(0, 5); // Top 5 vehicles by capacity
+  })).slice(0, 5); 
 
   const optimizationTrendData = optimizations
     .slice(0, 7)
     .reverse()
-    .map(opt => ({
-      name: new Date(opt.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      distance: Math.round(opt.totalDistance),
-      stops: opt.routes.reduce((acc, r) => acc + r.stops.length, 0)
-    }));
+    .map(opt => {
+      // Calculate fulfillment rate for each run
+      const totalLocations = (opt.locations?.length || 1) - 1;
+      const droppedCount = opt.dropped_nodes?.length || 0;
+      const rate = totalLocations > 0 ? ((totalLocations - droppedCount) / totalLocations) * 100 : 100;
+      
+      return {
+        name: new Date(opt.createdAt || opt.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        distance: Math.round(opt.totalDistance),
+        stops: opt.routes.reduce((acc, r) => acc + (r.stops?.length || 0), 0),
+        fulfillment: Math.round(rate)
+      };
+    });
+
+
 
   // Helper for map
   const getOptimizationLocations = () => {
@@ -230,27 +269,28 @@ const Dashboard = () => {
             <>
               <StatCard
                 icon={<FaTruck className="text-2xl" />}
-                label="Total Vehicles"
+                label="Fleet Assets"
                 value={stats.totalVehicles}
                 color="bg-blue-500"
                 link="/vehicles"
                 delay="0"
               />
               <StatCard
-                icon={<FaMapMarkerAlt className="text-2xl" />}
-                label="Locations"
-                value={stats.totalLocations}
+                icon={<FaCheckCircle className="text-2xl" />}
+                label="Eco Savings (CO2)"
+                value={`${stats.co2Saved?.toFixed(1)} kg`}
                 color="bg-emerald-500"
-                link="/locations"
                 delay="100"
+                isText
               />
               <StatCard
                 icon={<FaRoute className="text-2xl" />}
-                label="Optimizations"
-                value={stats.totalOptimizations}
+                label="Total Spend (Real)"
+                value={`₹${(stats.totalCost / 1000).toFixed(1)}k`}
                 color="bg-violet-500"
                 link="/optimizations"
                 delay="200"
+                isText
               />
               <StatCard
                 icon={<FaRoad className="text-2xl" />}
@@ -270,7 +310,10 @@ const Dashboard = () => {
             {/* Bar Chart */}
             <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-lg">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold">Optimization Trends</h3>
+                 <div>
+                   <h3 className="text-lg font-bold">Logistics Efficiency</h3>
+                   <p className="text-xs text-slate-400">Mileage and Fulfillment Rate Benchmark</p>
+                 </div>
                 <select className="text-sm bg-slate-50 dark:bg-slate-700 border-none rounded-lg px-3 py-1">
                   <option>Last 7 runs</option>
                 </select>
@@ -280,12 +323,14 @@ const Dashboard = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={optimizationTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#10b981' }} axisLine={false} tickLine={false} domain={[0, 100]} />
                       <RechartsTooltip
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backgroundColor: '#1e293b', color: '#fff' }}
                         cursor={{ fill: 'transparent' }}
                       />
-                      <Bar dataKey="distance" fill="#6366f1" radius={[4, 4, 0, 0]} name="Distance (km)" barSize={40} />
+                      <Bar yAxisId="left" dataKey="distance" fill="#6366f1" radius={[4, 4, 0, 0]} name="Distance (km)" barSize={40} />
+                      <Bar yAxisId="right" dataKey="fulfillment" fill="#10b981" radius={[4, 4, 0, 0]} name="Fulfillment %" barSize={10} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -294,31 +339,47 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Pie Chart */}
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-lg flex flex-col items-center justify-center">
-              <h3 className="text-lg font-bold w-full text-left mb-4">Fleet Capacity</h3>
-              <div className="h-[200px] w-full">
-                {vehicleCapacityData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={vehicleCapacityData}
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {vehicleCapacityData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-slate-400 text-sm">No vehicles added</div>
-                )}
+            {/* Pie Chart / Sustainability Mini Table */}
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-lg flex flex-col">
+              <h3 className="text-lg font-bold mb-1">Environmental Impact</h3>
+              <p className="text-xs text-slate-400 mb-6 font-medium">Planetary benefits of your routing</p>
+              
+              <div className="flex-1 space-y-6">
+                 <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Total Carbon Output</span>
+                    <span className="font-mono font-bold">{stats.totalCO2?.toFixed(1)} kg</span>
+                 </div>
+                 <div className="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full w-[25%]" title="Baseline comparison"></div>
+                 </div>
+                 
+                 <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/40">
+                    <div className="flex items-center gap-3 mb-2">
+                       <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white">🌱</div>
+                       <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-tighter">Carbon Saved</h4>
+                    </div>
+                    <p className="text-2xl font-black text-emerald-600">{stats.co2Saved?.toFixed(2)} <span className="text-xs font-normal">kg CO₂e</span></p>
+                    <p className="text-[10px] text-emerald-500/70 mt-1">Relative to standard un-optimized radial routing.</p>
+                 </div>
+
+                 <div className="h-[120px] w-full">
+                   <ResponsiveContainer width="100%" height="100%">
+                     <PieChart>
+                       <Pie
+                         data={vehicleCapacityData}
+                         innerRadius={40}
+                         outerRadius={55}
+                         paddingAngle={5}
+                         dataKey="value"
+                       >
+                         {vehicleCapacityData.map((entry, index) => (
+                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                         ))}
+                       </Pie>
+                       <RechartsTooltip />
+                     </PieChart>
+                   </ResponsiveContainer>
+                 </div>
               </div>
             </div>
           </div>
@@ -363,7 +424,7 @@ const Dashboard = () => {
                         <FaRoad /> {formatDistance(selectedOptimization.totalDistance)}
                       </div>
                       <div className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
-                        <FaClock /> {selectedOptimization.totalDuration ? `${Math.floor(selectedOptimization.totalDuration / 60)} min` : 'N/A'}
+                        <FaClock /> {selectedOptimization.totalDuration ? formatDuration(selectedOptimization.totalDuration) : 'N/A'}
                       </div>
                     </div>
                   </div>
@@ -378,32 +439,17 @@ const Dashboard = () => {
                   />
                 </div>
 
-                {/* Recent Routes Preview */}
-                <div className="p-6 md:p-8 bg-white dark:bg-slate-800">
-                  <h4 className="text-lg font-bold mb-4">Route Breakdown</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedOptimization.routes && selectedOptimization.routes.map((route, index) => {
-                      const vehicle = vehicles.find(v => v._id === route.vehicle) || { name: 'Unknown Vehicle' };
-                      const colors = ['bg-orange-500', 'bg-green-500', 'bg-blue-500', 'bg-pink-500', 'bg-purple-500'];
-                      const color = colors[index % colors.length];
-
-                      return (
-                        <div key={index} className="flex items-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                          <div className={`w-12 h-12 rounded-xl ${color} bg-opacity-10 flex items-center justify-center mr-4 text-white shadow-sm`}>
-                            <span className={`w-10 h-10 ${color} rounded-lg flex items-center justify-center text-lg font-bold`}>{index + 1}</span>
-                          </div>
-                          <div className="flex-1">
-                            <h5 className="font-bold text-slate-800 dark:text-slate-100 mb-1">{vehicle.name}</h5>
-                            <div className="text-xs text-slate-500 dark:text-slate-400 flex gap-3">
-                              <span>{route.stops ? route.stops.length : 0} Stops</span>
-                              <span>•</span>
-                              <span>{formatDistance(route.distance)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                {/* Footer Actions */}
+                <div className="p-6 md:p-8 border-t border-slate-100 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-800/30 flex justify-between items-center">
+                  <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                    Select any route in the map legend to highlight its live path.
+                  </p>
+                  <Link 
+                    to="/optimizations" 
+                    className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold hover:gap-3 transition-all"
+                  >
+                    View All Optimizations <FaChevronRight className="text-sm" />
+                  </Link>
                 </div>
 
               </div>

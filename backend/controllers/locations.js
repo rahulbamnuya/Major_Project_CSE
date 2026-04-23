@@ -45,7 +45,8 @@ exports.createLocation = async (req, res) => {
     isDepot,
     serviceTime,
     timeWindowStart,
-    timeWindowEnd
+    timeWindowEnd,
+    road_type
   } = req.body;
   // ==========================================================
 
@@ -61,6 +62,7 @@ exports.createLocation = async (req, res) => {
       serviceTime: serviceTime || 0,
       timeWindowStart: timeWindowStart, // Will be null if not provided
       timeWindowEnd: timeWindowEnd,     // Will be null if not provided
+      road_type: road_type || 'STANDARD',
       // =====================================================
       user: req.user.id
     });
@@ -85,7 +87,8 @@ exports.updateLocation = async (req, res) => {
     isDepot,
     serviceTime,
     timeWindowStart,
-    timeWindowEnd
+    timeWindowEnd,
+    road_type
   } = req.body;
   // ==========================================================
 
@@ -109,7 +112,8 @@ exports.updateLocation = async (req, res) => {
       isDepot,
       serviceTime,
       timeWindowStart,
-      timeWindowEnd
+      timeWindowEnd,
+      road_type
     };
 
     // Filter out undefined fields so we don't overwrite existing data with nothing

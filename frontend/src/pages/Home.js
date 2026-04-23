@@ -5,7 +5,6 @@ import {
   FaMapMarkedAlt,
   FaRoute,
   FaChartLine,
-  FaRocket,
   FaUsers,
   FaGlobe,
   FaArrowRight,
@@ -37,7 +36,7 @@ const RouteOptimizationDemo = () => {
 
   const algorithms = useMemo(() => ({
     'clarke-wright': {
-      name: 'Clarke-Wright Savings',
+      name: 'Modified Clarke-Wright',
       color: '#3b82f6',
       description: 'Classic savings-based algorithm'
     },
