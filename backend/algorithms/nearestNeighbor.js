@@ -1,5 +1,4 @@
-// /algorithms/nearestNeighbor.js
-const { calculateDistance } = require('../utils/optimizationUtils');
+const { calculateDistance, getDistanceMatrix } = require('../utils/optimizationUtils');
 
 // =================================================================
 // CONSTANTS
@@ -12,23 +11,21 @@ const DEPOT_START_TIME_SECONDS = 6 * 3600; // 6:00 AM
 const DEPOT_END_TIME_SECONDS = 22 * 3600; // 10:00 PM
 
 // =================================================================
-// HELPER: ObjectId to string
-// =================================================================
-const toId = (id) => id.toString();
-
-// =================================================================
 // MAIN: Nearest Neighbor Algorithm with Time Windows
 // =================================================================
-// =================================================================
-// MAIN: Nearest Neighbor Algorithm with Time Windows
-// =================================================================
-exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) => {
+exports.nearestNeighborAlgorithm = async (vehicles, locations, depot, options = {}) => {
     const useTimeWindows = options.useTimeWindows || false;
     const speedKmh = options.avgSpeedKmh || DEFAULT_SPEED_KMH;
 
     console.log(`🚚 Running Nearest Neighbor (Time Windows: ${useTimeWindows}, Speed: ${speedKmh}km/h)...`);
 
+    const toId = (objId) => objId.toString();
     const depotId = toId(depot._id);
+    
+    // Build real distance matrix
+    const allLocations = [depot, ...locations];
+    const distances = await getDistanceMatrix(allLocations);
+
     const pending = locations.filter((l) => toId(l._id) !== depotId);
 
     // Expand vehicles by count
@@ -48,7 +45,11 @@ exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) =>
     const routes = [];
     const used = new Set();
 
-    const dist = (a, b) => calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+    const dist = (a, b) => {
+        const idA = toId(a._id || a.locationId);
+        const idB = toId(b._id || b.locationId);
+        return distances[idA]?.[idB] ?? calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+    };
 
     // HELPER: Compute travel time in seconds
     const computeTravelTime = (distanceKm) => {
@@ -141,8 +142,10 @@ exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) =>
                 arrivalTime: Math.round(arrivalTime),
                 serviceTime: Math.round(serviceTime),
                 departureTime: Math.round(departureTime),
-                startTimeWindowSeconds: best.timeWindow ? best.timeWindow[0] * 60 : null,
-                endTimeWindowSeconds: best.timeWindow ? best.timeWindow[1] * 60 : null,
+                startTimeWindowSeconds: best.timeWindow ? (best.timeWindow[0] * 60) : DEPOT_START_TIME_SECONDS,
+                endTimeWindowSeconds: best.timeWindow ? (best.timeWindow[1] * 60) : DEPOT_END_TIME_SECONDS,
+                timeWindowStart: best.timeWindow ? (best.timeWindow[0] * 60) : DEPOT_START_TIME_SECONDS,
+                timeWindowEnd: best.timeWindow ? (best.timeWindow[1] * 60) : DEPOT_END_TIME_SECONDS,
                 road_type: best.road_type || 'STANDARD',
             });
 
@@ -183,7 +186,27 @@ exports.nearestNeighborAlgorithm = (vehicles, locations, depot, options = {}) =>
                 distance: totalDistance,
                 duration: Math.round((arrivalTimeDepot - DEPOT_START_TIME_SECONDS) / 60),
                 totalCapacity: vs.capacity - remainingCapacity,
+                timeWindowApplied: useTimeWindows,
+                timeViolationCount: 0, // Will be computed
+                isViolated: false
             });
+
+            // Post-process to count violations
+            const lastRoute = routes[routes.length - 1];
+            lastRoute.stops.forEach((s, idx) => {
+                if (useTimeWindows && s.endTimeWindowSeconds && s.arrivalTime > s.endTimeWindowSeconds) {
+                    lastRoute.isViolated = true;
+                    lastRoute.timeViolationCount++;
+                    s.isLate = true;
+                }
+                // Always set goalTime for UI (Default to 10PM if window not specified)
+                s.goalTime = s.endTimeWindowSeconds || DEPOT_END_TIME_SECONDS;
+            });
+            if (arrivalTimeDepot > DEPOT_END_TIME_SECONDS) {
+                lastRoute.isViolated = true;
+                lastRoute.timeViolationCount++;
+                lastRoute.stops[lastRoute.stops.length-1].isLate = true;
+            }
         }
 
         if (used.size === pending.length) break;

@@ -7,11 +7,9 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
   const { useTimeWindows = false, avgSpeedKmh = 25, strategy = 'hybrid', smallThreshold = 1000, mediumThreshold = 4000 } = options;
 
   // Use local Python API for development
-  // For production, use: 'https://major-project-cse-222.onrender.com/optimize'
   const PYTHON_API_URL = process.env.PYTHON_API_URL || 'http://127.0.0.1:8000/optimize';
 
   try {
-    // Ensure depot is included in locations array for Python API
     const allLocations = [depot, ...locations];
 
     const requestData = {
@@ -19,9 +17,9 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
         name: loc.name,
         latitude: loc.latitude,
         longitude: loc.longitude,
-        serviceTime: loc.serviceTime || 0, // in minutes
-        timeWindowStart: loc.timeWindow ? loc.timeWindow[0] : null, // in minutes
-        timeWindowEnd: loc.timeWindow ? loc.timeWindow[1] : null, // in minutes
+        serviceTime: loc.serviceTime || 0,
+        timeWindowStart: loc.timeWindowStart !== undefined ? loc.timeWindowStart : null,
+        timeWindowEnd: loc.timeWindowEnd !== undefined ? loc.timeWindowEnd : null,
         road_type: loc.road_type || 'STANDARD',
       })),
       vehicles: vehicles.map(v => ({
@@ -35,28 +33,19 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
       time_limit_seconds: 30,
       useTimeWindows: useTimeWindows,
       traffic_factor: 1.25,
-      avg_speed_kmh: avgSpeedKmh, // Send average speed from frontend
+      avg_speed_kmh: avgSpeedKmh,
       strategy: strategy,
       small_threshold: smallThreshold,
       medium_threshold: mediumThreshold,
     };
 
-    // Ensure depot is at index 0 and has zero demand
     if (requestData.demands.length > 0) requestData.demands[0] = 0;
 
     console.log('📤 Sending data to Python VRP solver...');
-    console.log(`   Depot: ${depot.name}`);
-    console.log(`   Locations (including depot): ${requestData.locations.length}`);
-    console.log(`   Vehicles: ${vehicles.length}`);
     const response = await axios.post(PYTHON_API_URL, requestData);
 
     if (response.data?.result) {
       console.log('✅ Received VRP solution from Python API');
-
-      console.log('✅ Received VRP solution from Python API');
-
-      // Use the same locations array structure that we sent to Python: [depot, ...locations]
-      // This ensures Index 0 maps to Depot, Index 1 to first customer, etc.
       const mappingLocations = [depot, ...locations];
 
       const routes = response.data.result.map(route => {
@@ -79,13 +68,16 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
             order,
             arrivalTime: arrivalTimes[order] ?? null,
             serviceTime: serviceTimes[order] ?? null,
-            timeWindowStart: loc.timeWindow ? loc.timeWindow[0] * 60 : null,
-            timeWindowEnd: loc.timeWindow ? loc.timeWindow[1] * 60 : null,
+            startTimeWindowSeconds: (loc.timeWindowStart != null ? loc.timeWindowStart * 60 : null) || (6 * 3600),
+            endTimeWindowSeconds: (loc.timeWindowEnd != null ? loc.timeWindowEnd * 60 : null) || (22 * 3600),
+            timeWindowStart: (loc.timeWindowStart != null ? loc.timeWindowStart * 60 : null) || (6 * 3600),
+            timeWindowEnd: (loc.timeWindowEnd != null ? loc.timeWindowEnd * 60 : null) || (22 * 3600),
+            goalTime: (loc.timeWindowEnd != null ? loc.timeWindowEnd * 60 : null) || (22 * 3600),
             road_type: loc.road_type || 'STANDARD',
           };
         }).filter(Boolean);
 
-        return {
+        const r = {
           vehicle: rawVehicleId,
           vehicleName: vehicle?.name ? `${vehicle.name} (${route['Vehicle ID'].includes('_Trip') ? 'Trip ' + route['Vehicle ID'].split('_Trip')[1] : 'Trip 1'})` : `Vehicle ${route['Vehicle ID']}`,
           distance: route['Distance (km)'] || 0,
@@ -93,7 +85,26 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
           totalCapacity: route['Load Carried'] || 0,
           stops,
           routeGeometry: route['Route Geometry'] || [],
+          timeWindowApplied: useTimeWindows,
+          timeViolationCount: 0,
+          isViolated: false
         };
+
+        // Post-process violations
+        r.stops.forEach(s => {
+          if (useTimeWindows && s.goalTime && s.arrivalTime > s.goalTime) {
+            r.isViolated = true;
+            r.timeViolationCount++;
+            s.isLate = true;
+          }
+        });
+        if (r.stops.length > 0 && r.stops[r.stops.length - 1].arrivalTime > (22 * 3600)) {
+          r.isViolated = true;
+          r.timeViolationCount++;
+          r.stops[r.stops.length - 1].isLate = true;
+        }
+
+        return r;
       });
 
       return {
@@ -108,8 +119,7 @@ exports.orToolsAlgorithm = async (vehicles, locations, depot, options = {}) => {
 
   } catch (error) {
     console.error('❌ Error calling Python VRP solver:', error.message);
-    console.log('🔁 Falling back to Clarke-Wright due to API error.');
-    const fallBackRoutes = await clarkeWrightAlgorithmWithTimeWindows(vehicles, locations, depot, useTimeWindows);
+    const fallBackRoutes = await clarkeWrightAlgorithmWithTimeWindows(vehicles, locations, depot, { useTimeWindows });
     return { routes: fallBackRoutes, droppedNodes: [] };
   }
 };

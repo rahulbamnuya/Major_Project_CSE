@@ -9,7 +9,8 @@ import {
   FaExclamationTriangle,
   FaDownload,
   FaRoute,
-  FaBox
+  FaBox,
+  FaClock
 } from "react-icons/fa";
 import OptimizationService from "../services/optimization.service";
 import { useToast } from "../components/ToastProvider";
@@ -92,10 +93,20 @@ const AlgorithmComparison = () => {
 
   const formatCurrency = (val) => `₹${Number(val || 0).toFixed(2)}`;
   const formatDistance = (val) => `${Number(val || 0).toFixed(2)} km`;
+  
+  const formatTime = (seconds) => {
+    if (seconds === null || seconds === undefined) return '--:--';
+    const totalMinutes = Math.floor(seconds / 60);
+    const h24 = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    const ampm = h24 >= 12 ? 'PM' : 'AM';
+    return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+  };
 
   const handleExportCSV = () => {
     if (!displayResults || !optimization) return;
-    const headers = ['Algorithm', 'Distance (km)', 'Real Operations Cost', 'Vehicles Used', 'Compute Time (ms)', 'Safety Violations', 'Fulfillment'];
+    const headers = ['Algorithm', 'Distance (km)', 'Real Operations Cost', 'Vehicles Used', 'Compute Time (ms)', 'Geo Violations', 'Time Violations', 'Fulfillment'];
     const rows = displayResults.map(r => [
       r.algorithm,
       r.totalDistance.toFixed(2),
@@ -103,6 +114,7 @@ const AlgorithmComparison = () => {
       r.vehiclesUsedCount,
       r.executionTime,
       r.violationsCount || 0,
+      r.timeViolationCount || 0,
        `${r.totalStops} / ${(optimization.locations?.length || 1) - 1}`
     ]);
 
@@ -234,8 +246,9 @@ const AlgorithmComparison = () => {
         avgCostPerKm: totalDistance > 0 ? totalRealCost / totalDistance : 0,
         // 🛡️ Integrity Profile: All algorithms have been upgraded to enforce road constraints
         isInfrastructureAware: true,
+        timeViolationCount: result.totalTimeViolations || 0, // From backend
         // ⚖️ Scoring Factor for 'Best Algorithm' (Feasibility First)
-        performanceScore: (actualStopsServed * 10000) - (violationsCount * 5000) - totalRealCost - (uniqueVehicleIds.size * 500)
+        performanceScore: (actualStopsServed * 10000) - (violationsCount * 5000) - (result.totalTimeViolations * 2000) - totalRealCost - (uniqueVehicleIds.size * 500)
       };
     }).filter(r => !r.error); // Filter out failed runs for charts
   }, [optimization]);
@@ -552,7 +565,8 @@ const AlgorithmComparison = () => {
                   <th className="p-4">Compute Speed</th>
                   <th className="p-4">Distance</th>
                   <th className="p-4">Real Ops. Cost</th>
-                  <th className="p-4 text-center">Constraint Audit</th>
+                  <th className="p-4 text-center">Geo Audit</th>
+                  <th className="p-4 text-center">Time Audit</th>
                   <th className="p-4">Fulfillment</th>
                   <th className="p-4 text-center">Action</th>
                 </tr>
@@ -589,10 +603,10 @@ const AlgorithmComparison = () => {
                         <div className="flex flex-col items-center gap-1">
                           {result.violationsCount > 0 ? (
                             <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded font-bold text-[10px] flex items-center gap-1">
-                              <FaExclamationTriangle className="text-[9px]" /> {result.violationsCount} Risk Points
+                              <FaExclamationTriangle className="text-[9px]" /> {result.violationsCount} Geo Risks
                             </span>
                           ) : (
-                            <span className="text-emerald-500 font-bold text-[10px]">Safe Access</span>
+                            <span className="text-emerald-500 font-bold text-[10px]">Road Safe</span>
                           )}
                           {result.routes?.some(r => {
                              const v = optimization?.vehicles?.find(veh => veh._id === r.vehicle || veh._id.toString() === r.vehicle);
@@ -601,6 +615,17 @@ const AlgorithmComparison = () => {
                             <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-black text-[9px] animate-pulse">
                                CAPACITY BREACH
                             </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          {result.timeViolationCount > 0 ? (
+                            <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded font-bold text-[10px] flex items-center gap-1">
+                              <FaClock className="text-[9px]" /> {result.timeViolationCount} Late Stops
+                            </span>
+                          ) : (
+                            <span className="text-emerald-500 font-bold text-[10px]">On-Time</span>
                           )}
                         </div>
                       </td>
@@ -635,10 +660,10 @@ const AlgorithmComparison = () => {
                     <div>
                        <h2 className="text-xl font-bold flex items-center gap-2">
                           <FaExclamationTriangle className="text-amber-500" />
-                          Infrastructure Violation Audit
+                          Multi-Constraint Violation Audit
                        </h2>
                        <p className="text-sm text-slate-500">
-                          Granular inspection of {processedResults[selectedAlgorithmIndex].algorithm}'s routing strategy
+                          Granular inspection of {processedResults[selectedAlgorithmIndex].algorithm}'s road and time compliance
                        </p>
                     </div>
                     <div className="bg-white dark:bg-slate-700 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm">
@@ -695,10 +720,32 @@ const AlgorithmComparison = () => {
                                    const isViolated = (rType === 'NARROW' && vType !== 'SMALL') || (rType === 'STANDARD' && vType === 'LARGE');
                                    
                                    return (
-                                      <div key={sIdx} className={`flex items-center justify-between p-2 rounded-lg text-xs ${isViolated ? 'bg-red-100/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30' : 'bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700'}`}>
-                                         <div className="flex items-center gap-2">
-                                            <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-bold text-[10px]">{sIdx + 1}</span>
-                                            <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[100px]">{stop.locationName}</span>
+                                      <div key={sIdx} className={`flex flex-col gap-2 p-3 rounded-lg text-xs ${isViolated ? 'bg-red-100/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30' : 'bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700'}`}>
+                                         <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                               <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-bold text-[10px]">{sIdx + 1}</span>
+                                               <span className="font-bold text-slate-800 dark:text-white truncate max-w-[120px]">{stop.locationName}</span>
+                                            </div>
+                                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${
+                                               rType === 'NARROW' ? 'bg-red-100 text-red-600' : 
+                                               rType === 'WIDE' ? 'bg-emerald-100 text-emerald-600' : 
+                                               'bg-slate-100 text-slate-500'
+                                            }`}>
+                                               {rType}
+                                            </span>
+                                         </div>
+                                         
+                                         <div className="grid grid-cols-2 gap-2 border-t border-slate-50 dark:border-slate-700/50 pt-2 mt-1">
+                                            <div>
+                                               <span className="text-[9px] text-slate-400 block uppercase">Arrival</span>
+                                               <span className="font-mono font-bold text-slate-900 dark:text-white">{formatTime(stop.arrivalTime)}</span>
+                                            </div>
+                                            <div>
+                                               <span className="text-[9px] text-blue-500 block uppercase font-black">Goal Window</span>
+                                               <span className="font-mono text-[10px] text-slate-600 dark:text-slate-400">
+                                                  {stop.timeWindowStart != null ? `${formatTime(stop.timeWindowStart)} - ${formatTime(stop.timeWindowEnd)}` : 'Unrestricted'}
+                                               </span>
+                                            </div>
                                          </div>
                                       </div>
                                    );

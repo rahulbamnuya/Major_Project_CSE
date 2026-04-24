@@ -212,7 +212,7 @@
 // };
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // /algorithms/geneticAlgorithmVRP.js
-const { calculateDistance, calculateTotalCost } = require('../utils/optimizationUtils');
+const { calculateDistance, calculateTotalCost, getDistanceMatrix } = require('../utils/optimizationUtils');
 
 // =================================================================
 // CONSTANTS
@@ -235,6 +235,9 @@ const toId = (objId) => objId.toString();
 function recomputeRouteMetrics(route, distances, useTimeWindows = false, speedKmh = DEFAULT_SPEED_KMH) {
     let totalDistance = 0;
     let currentTime = DEPOT_START_TIME_SECONDS;
+    route.timeViolationCount = 0;
+    route.isViolated = false;
+    route.timeWindowApplied = useTimeWindows;
 
     for (let i = 0; i < route.stops.length - 1; i++) {
         const from = route.stops[i];
@@ -250,15 +253,25 @@ function recomputeRouteMetrics(route, distances, useTimeWindows = false, speedKm
 
         // Service time
         const demand = to.demand || 0;
-        let serviceTime = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
+        let serviceTime = (i === route.stops.length - 2) ? 0 : (BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING));
+
+        const twStart = to.startTimeWindowSeconds;
+        const twEnd = to.endTimeWindowSeconds;
+        
+        // Always provide goalTime for UI (Default to 10PM)
+        to.goalTime = twEnd || DEPOT_END_TIME_SECONDS;
 
         // Handle time windows
-        if (useTimeWindows && to.startTimeWindowSeconds !== undefined) {
-            const twStart = to.startTimeWindowSeconds || 0;
-            const twEnd = to.endTimeWindowSeconds || DEPOT_END_TIME_SECONDS;
-            if (arrivalTime < twStart) serviceTime += (twStart - arrivalTime);
-            arrivalTime = Math.max(arrivalTime, twStart);
-            // If arrival after window end, we could mark infeasible (optional)
+        if (useTimeWindows && twStart !== undefined && twStart !== null) {
+            if (arrivalTime < twStart) {
+                // Wait until window opens
+                arrivalTime = twStart;
+            }
+            if (arrivalTime > twEnd) {
+                route.isViolated = true;
+                route.timeViolationCount++;
+                to.isLate = true;
+            }
         }
 
         to.arrivalTime = Math.round(arrivalTime);
@@ -325,8 +338,10 @@ function createRandomSolution(vehicles, locations, depot, distances, useTimeWind
                 order: idx + 1,
                 arrivalTime: 0,
                 serviceTime: 0,
-                startTimeWindowSeconds: loc.startTimeWindowSeconds,
-                endTimeWindowSeconds: loc.endTimeWindowSeconds,
+                startTimeWindowSeconds: loc.startTimeWindowSeconds || DEPOT_START_TIME_SECONDS,
+                endTimeWindowSeconds: loc.endTimeWindowSeconds || DEPOT_END_TIME_SECONDS,
+                timeWindowStart: loc.startTimeWindowSeconds || DEPOT_START_TIME_SECONDS,
+                timeWindowEnd: loc.endTimeWindowSeconds || DEPOT_END_TIME_SECONDS,
                 road_type: loc.road_type || 'STANDARD'
             })),
             { locationId: depot._id, locationName: depot.name, latitude: depot.latitude, longitude: depot.longitude, demand: 0, order: slot.locations.length + 1, arrivalTime: 0, serviceTime: 0 }
@@ -398,21 +413,14 @@ function mutate(solution, distances, useTimeWindows = false, speedKmh = DEFAULT_
 // =================================================================
 // MAIN: Genetic Algorithm VRP with Time Windows
 // =================================================================
-exports.geneticAlgorithmVRP = (vehicles, locations, depot, options = {}) => {
+exports.geneticAlgorithmVRP = async (vehicles, locations, depot, options = {}) => {
     const useTimeWindows = options.useTimeWindows || false;
     const speedKmh = options.avgSpeedKmh || DEFAULT_SPEED_KMH;
 
     console.log(`🚚 Running Genetic Algorithm (Time Windows: ${useTimeWindows}, Speed: ${speedKmh}km/h)...`);
 
-    const distances = {};
     const allLocations = [depot, ...locations];
-
-    allLocations.forEach(l1 => {
-        distances[toId(l1._id)] = {};
-        allLocations.forEach(l2 => {
-            distances[toId(l1._id)][toId(l2._id)] = calculateDistance(l1.latitude, l1.longitude, l2.latitude, l2.longitude);
-        });
-    });
+    const distances = await getDistanceMatrix(allLocations);
 
     const nonDepot = locations.filter(l => toId(l._id) !== toId(depot._id));
     const populationSize = Math.min(30, Math.max(10, nonDepot.length * 2));

@@ -1,15 +1,17 @@
-const { calculateDistance } = require('../utils/optimizationUtils');
+const { calculateDistance, getDistanceMatrix } = require('../utils/optimizationUtils');
 const { enhancedLocalSearch } = require('./localSearch');
 
-// exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot) => {
-//     console.log("Running Enhanced Clarke-Wright Algorithm...");
-//     // ... Paste the entire logic of the enhancedClarkeWrightAlgorithm here
-//     return routes;
-// };
-// =================================================================
-// MAIN: Enhanced Clarke-Wright Algorithm
-// =================================================================
-exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {}) => {
+const formatTimeWindow = (start, end) => ({
+  startTimeWindowSeconds: start != null ? start * 60 : 6 * 3600,
+  endTimeWindowSeconds: end != null ? end * 60 : 22 * 3600,
+  timeWindowStart: start != null ? start * 60 : 6 * 3600,
+  timeWindowEnd: end != null ? end * 60 : 22 * 3600,
+});
+
+/**
+ * MAIN: Enhanced Clarke-Wright Algorithm
+ */
+exports.enhancedClarkeWrightAlgorithm = async (vehicles, locations, depot, options = {}) => {
   const useTimeWindows = options.useTimeWindows || false;
   const avgSpeedKmh = options.avgSpeedKmh || 40;
 
@@ -18,28 +20,25 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
   const toId = (objId) => objId.toString();
   const depotId = toId(depot._id);
 
-  // Constants
-  const BASE_SERVICE_TIME_SECONDS = 3 * 60;
-  const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60;
   const TRAFFIC_FACTOR = 1.25;
   const DEPOT_START_TIME_SECONDS = 6 * 3600;
+  const DEPOT_END_TIME_SECONDS = 22 * 3600;
+  const BASE_SERVICE_TIME_SECONDS = 3 * 60;
+  const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60;
 
   // Build distance matrix (include depot)
-  const distances = {};
   const allLocations = [depot, ...locations];
-
-  allLocations.forEach((l1) => {
-    const id1 = toId(l1._id);
-    distances[id1] = {};
-    allLocations.forEach((l2) => {
-      const id2 = toId(l2._id);
-      distances[id1][id2] = calculateDistance(
-        l1.latitude, l1.longitude, l2.latitude, l2.longitude
-      );
-    });
-  });
+  const distances = await getDistanceMatrix(allLocations);
 
   const nonDepot = locations.filter((l) => toId(l._id) !== depotId);
+
+  // Dynamic Infrastructure Thresholds (match clarkeWright.js)
+  const getVehType = (v) => (v.vehicle_type || '').toUpperCase();
+  const maxCap = {
+    NARROW: Math.max(0, ...vehicles.filter(v => getVehType(v) === 'SMALL').map(v => v.capacity || 0)),
+    STANDARD: Math.max(0, ...vehicles.filter(v => ['SMALL', 'MEDIUM'].includes(getVehType(v))).map(v => v.capacity || 0)),
+    WIDE: Math.max(0, ...vehicles.map(v => v.capacity || 0))
+  };
 
   // Enhanced savings calculation
   const savings = [];
@@ -50,8 +49,16 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
       const idI = toId(li._id);
       const idJ = toId(lj._id);
 
+      const getDist = (fId, tId, fLoc, tLoc) => {
+          return distances[fId]?.[tId] ?? calculateDistance(fLoc.latitude, fLoc.longitude, tLoc.latitude, tLoc.longitude);
+      };
+
       // Basic C-W Saving: d(D,i) + d(D,j) - d(i,j)
-      const basicSaving = distances[depotId][idI] + distances[depotId][idJ] - distances[idI][idJ];
+      const distDI = getDist(depotId, idI, depot, li);
+      const distDJ = getDist(depotId, idJ, depot, lj);
+      const distIJ = getDist(idI, idJ, li, lj);
+      
+      const basicSaving = distDI + distDJ - distIJ;
 
       // Enhanced factors
       const angleI = Math.atan2(li.latitude - depot.latitude, li.longitude - depot.longitude);
@@ -65,10 +72,10 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
       const maxVehicleCapacity = vehicles.length > 0 ? Math.max(...vehicles.map(v => v.capacity || 0)) : Infinity;
       const capacityCompatibility = combinedDemand <= maxVehicleCapacity ? 1 : Math.max(0.1, maxVehicleCapacity / combinedDemand);
 
-      const distanceEfficiency = Math.max(0.8, 1 - (distances[idI][idJ] / 50));
+      const distanceEfficiency = Math.max(0.8, 1 - (distIJ / 50));
 
       const enhancedSaving = basicSaving *
-        (1 + angularBonus * 0.15) *
+        (1 + (1 - angularBonus) * 0.15) *
         capacityCompatibility *
         distanceEfficiency;
 
@@ -121,8 +128,17 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
     const travelTime2 = ((distFrom / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR;
     const arrivalDepot = departure1 + travelTime2;
 
+    const locTimeWindow = formatTimeWindow(
+        loc.timeWindowStart || (loc.timeWindow ? loc.timeWindow[0] : null),
+        loc.timeWindowEnd || (loc.timeWindow ? loc.timeWindow[1] : null)
+    );
+
     const stops = [
-      makeDepotStop(0),
+      {
+        ...makeDepotStop(0),
+        arrivalTime: DEPOT_START_TIME_SECONDS,
+        departureTime: DEPOT_START_TIME_SECONDS
+      },
       {
         locationId: loc._id,
         locationName: loc.name,
@@ -133,8 +149,7 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
         arrivalTime: Math.round(finalArrival),
         serviceTime: Math.round(serviceTime + wait),
         departureTime: Math.round(departure1),
-        startTimeWindowSeconds: loc.startTimeWindowSeconds,
-        endTimeWindowSeconds: loc.endTimeWindowSeconds
+        ...locTimeWindow
       },
       {
         ...makeDepotStop(2),
@@ -166,6 +181,9 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
   const recomputeRouteMetrics = (rt) => {
     let totalDist = 0;
     let currentTime = DEPOT_START_TIME_SECONDS;
+    rt.isViolated = false;
+    rt.timeViolationCount = 0;
+    rt.timeWindowApplied = useTimeWindows;
     rt.stops[0].arrivalTime = currentTime;
     rt.stops[0].departureTime = currentTime;
 
@@ -175,6 +193,7 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
       const fromId = toId(from.locationId);
       const toIdStr = toId(to.locationId);
 
+      // Use matrix strictly with robust fallback (preventing 0-dist bugs)
       const dist = distances[fromId]?.[toIdStr] ?? calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
       totalDist += dist;
 
@@ -189,21 +208,37 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
         const demand = to.demand || 0;
         service = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
 
-        if (useTimeWindows && to.startTimeWindowSeconds != null) {
-          if (arrival < to.startTimeWindowSeconds) {
-            wait = to.startTimeWindowSeconds - arrival;
-            arrival = to.startTimeWindowSeconds;
+        const twStart = to.startTimeWindowSeconds;
+        const twEnd = to.endTimeWindowSeconds;
+        
+        // Always provide goalTime for UI
+        to.goalTime = twEnd;
+
+        if (useTimeWindows && twStart != null) {
+          if (arrival < twStart) {
+            wait = twStart - arrival;
+            arrival = twStart;
+          }
+          if (arrival > twEnd) {
+            rt.isViolated = true;
+            rt.timeViolationCount++;
+            to.isLate = true;
           }
         }
       }
 
       to.arrivalTime = Math.round(arrival);
-      // Store raw service time + wait time if needed, or just service. 
-      // Usually serviceTime field implies duration of stay.
-      to.serviceTime = Math.round(service + wait);
-
+      to.waitingTime = Math.round(wait);
+      to.serviceTime = Math.round(service); // Separate service from wait
       currentTime = arrival + service;
       to.departureTime = Math.round(currentTime);
+    }
+
+    // Check final return to depot
+    if (rt.stops[rt.stops.length - 1].arrivalTime > DEPOT_END_TIME_SECONDS) {
+      rt.isViolated = true;
+      rt.timeViolationCount++;
+      rt.stops[rt.stops.length - 1].isLate = true;
     }
 
     rt.distance = totalDist;
@@ -250,7 +285,24 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
     if (!newStops) continue;
 
     const combinedDemand = (r1.totalCapacity || 0) + (r2.totalCapacity || 0);
-    if (combinedDemand > maxCapacity) continue;
+
+    // 🛡️ INFRASTRUCTURE AWARENESS: Don't merge if it violates road capacities
+    const getStrictest = (rt) => {
+      let strict = 'WIDE';
+      rt.stops.forEach(s => {
+        const type = (s.road_type || 'STANDARD').toUpperCase();
+        if (type === 'NARROW') strict = 'NARROW';
+        else if (type === 'STANDARD' && strict !== 'NARROW') strict = 'STANDARD';
+      });
+      return strict;
+    };
+
+    const s1 = getStrictest(r1);
+    const s2 = getStrictest(r2);
+    const overall = (s1 === 'NARROW' || s2 === 'NARROW') ? 'NARROW' : ((s1 === 'STANDARD' || s2 === 'STANDARD') ? 'STANDARD' : 'WIDE');
+    const allowedMaxCap = maxCap[overall] || 0;
+
+    if (combinedDemand > allowedMaxCap) continue;
 
     // Fix orders
     newStops.forEach((st, idx) => st.order = idx);
@@ -266,8 +318,8 @@ exports.enhancedClarkeWrightAlgorithm = (vehicles, locations, depot, options = {
 
     recomputeRouteMetrics(mergedRoute);
 
+    // Reverted: Priority is fulfillment over strict timing.
     // Replace the two routes with merged one
-    // Remove larger index first to avoid shifting problems
     const idx1 = Math.max(rIdxI, rIdxJ);
     const idx2 = Math.min(rIdxI, rIdxJ);
     routes.splice(idx1, 1);

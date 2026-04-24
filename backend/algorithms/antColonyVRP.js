@@ -1,5 +1,5 @@
 // /algorithms/antColonyVRP.js
-const { calculateDistance } = require('../utils/optimizationUtils');
+const { calculateDistance, getDistanceMatrix } = require('../utils/optimizationUtils');
 
 // --- CONFIGURATION CONSTANTS (NOW IN SECONDS) ---
 const BASE_SERVICE_TIME_SECONDS = 3 * 60; // 3 minutes
@@ -123,6 +123,8 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
             }
 
             currentCapacity += demand;
+            const twEnd = nextLocation.endTimeWindowSeconds;
+
             route.stops.push({
                 locationId: nextLocation._id,
                 locationName: nextLocation.name,
@@ -133,7 +135,12 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
                 arrivalTime: Math.round(arrivalTime),
                 serviceTime: Math.round(serviceTimeTotal),
                 departureTime: Math.round(serviceStartTime + serviceTimeRaw),
-                road_type: nextLocation.road_type || 'STANDARD'
+                road_type: nextLocation.road_type || 'STANDARD',
+                startTimeWindowSeconds: nextLocation.startTimeWindowSeconds || DEPOT_START_TIME_SECONDS,
+                endTimeWindowSeconds: twEnd || DEPOT_END_TIME_SECONDS,
+                timeWindowStart: nextLocation.startTimeWindowSeconds || DEPOT_START_TIME_SECONDS,
+                timeWindowEnd: twEnd || DEPOT_END_TIME_SECONDS,
+                goalTime: twEnd || DEPOT_END_TIME_SECONDS // For UI
             });
             route.routeGeometry.push([nextLocation.latitude, nextLocation.longitude]);
 
@@ -177,6 +184,24 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
             route.distance = totalDist;
             route.duration = Math.round((currentTime - DEPOT_START_TIME_SECONDS) / 60);
             route.totalCapacity = currentCapacity;
+            route.timeWindowApplied = useTimeWindows;
+            route.timeViolationCount = 0;
+            route.isViolated = false;
+
+            // Post-process violations
+            route.stops.forEach(s => {
+                if (useTimeWindows && s.endTimeWindowSeconds && s.arrivalTime > s.endTimeWindowSeconds) {
+                    route.isViolated = true;
+                    route.timeViolationCount++;
+                    s.isLate = true;
+                }
+            });
+            if (currentTime > DEPOT_END_TIME_SECONDS) {
+                route.isViolated = true;
+                route.timeViolationCount++;
+                route.stops[route.stops.length-1].isLate = true;
+            }
+
             routes.push(route);
         }
     }
@@ -292,10 +317,9 @@ function chooseNextLocation(
 
 
 // --- Main exported ACO ---
-exports.antColonyOptimizationVRP = (vehicles, locations, depot, options = {}) => {
+exports.antColonyOptimizationVRP = async (vehicles, locations, depot, options = {}) => {
     console.log("Running Ant Colony Optimization...");
     // Build distances matrix and ensure depot is included
-    const distances = {};
     // include depot as well: create an array "allPlaces" = locations + depot (if not present)
     const depotId = toId(depot._id);
     const locMap = new Map(locations.map(l => [toId(l._id), l]));
@@ -305,19 +329,8 @@ exports.antColonyOptimizationVRP = (vehicles, locations, depot, options = {}) =>
     }
 
     // Add all locations (and depot) to distances
-    const allPlaces = [...locations];
-    if (!locations.some(l => toId(l._id) === depotId)) {
-        allPlaces.push(depot);
-    }
-
-    allPlaces.forEach(l1 => {
-        const id1 = toId(l1._id);
-        distances[id1] = {};
-        allPlaces.forEach(l2 => {
-            const id2 = toId(l2._id);
-            distances[id1][id2] = calculateDistance(l1.latitude, l1.longitude, l2.latitude, l2.longitude);
-        });
-    });
+    const allPlaces = [depot, ...locations];
+    const distances = await getDistanceMatrix(allPlaces);
 
     // ACO params
     const numAnts = 20;

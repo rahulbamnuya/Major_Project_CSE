@@ -10,6 +10,7 @@ const { getOsrmRouteForStops } = require('../utils/osrmUtils');
 // ALGORITHMS (Ensure all are imported)
 // Assuming the new CW file is aliased as 'clarkeWrightAlgorithm'
 const { clarkeWrightAlgorithmWithTimeWindows } = require('../algorithms/clarkeWright');
+const { enhancedClarkeWrightAlgorithm } = require('../algorithms/enhancedClarkeWright');
 const { nearestNeighborAlgorithm } = require('../algorithms/nearestNeighbor');
 const { geneticAlgorithmVRP } = require('../algorithms/geneticAlgorithmVRP');
 const { antColonyOptimizationVRP } = require('../algorithms/antColonyVRP');
@@ -228,8 +229,12 @@ exports.createOptimization = async (req, res) => {
     // 3. Algorithm mapping: JS algorithms use expanded fleet, Python handles expansion internally
     const algorithmMap = {
       'clarke-wright': { 
-        name: 'Modified Clarke-Wright', 
+        name: 'Modified Clarke-Wright (Deep Compliance)', 
         function: (v, l, d, opts) => clarkeWrightAlgorithmWithTimeWindows(expandedVehiclesJS, l, d, opts) 
+      },
+      'enhanced-clarke-wright': { 
+        name: 'Standard Heuristic (Enhanced CW)', 
+        function: (v, l, d, opts) => enhancedClarkeWrightAlgorithm(expandedVehiclesJS, l, d, opts) 
       },
       'nearest-neighbor': { 
         name: 'Nearest Neighbor', 
@@ -379,6 +384,7 @@ async function runAlgorithmComparison(req, res, context) {
       avgDeliveryTime: a.avgDeliveryTimeMinutes,
       coverage: a.coveragePercentage,
       utilization: a.vehicleUtilization,
+      onTimeViolations: a.totalTimeViolations, // New
       onTimeRate: a.onTimeRate,
       executionTime: a.executionTime
     }))
@@ -478,9 +484,11 @@ function calculateRouteMetrics(routes, locations, vehicles, depotId, useTimeWind
     totalStops = 0,
     totalServiceTime = 0,
     totalArrivalDelay = 0,
-    onTimeDeliveries = 0;
+    onTimeDeliveries = 0,
+    variableCost = 0;
 
   const servedLocationIds = new Set();
+  const usedVehicleIds = new Set();
 
   routes.forEach(route => {
     totalDistance += route.distance || 0;
@@ -488,53 +496,61 @@ function calculateRouteMetrics(routes, locations, vehicles, depotId, useTimeWind
     totalDemandServed += route.totalCapacity || 0;
     totalStops += route.stops?.length ? route.stops.length - 2 : 0; // exclude depot start/end
 
-    // calculate route-level service time stats
+    // Find the physical vehicle for cost calculation
+    const rawId = route.vehicle?.toString().split('_T')[0];
+    const v = vehicles.find(veh => veh._id.toString() === rawId);
+    
+    if (v) {
+        usedVehicleIds.add(rawId);
+        // Variable Cost = Dist * (Fuel Rate + Driver Rate)
+        const fuelRate = v.fuel_cost_per_km || 10;
+        const driverRate = v.driver_cost_per_km || 8;
+        variableCost += (route.distance || 0) * (fuelRate + driverRate);
+    }
+
     route.stops?.forEach(stop => {
       if (stop.locationId && stop.locationId.toString() !== depotId.toString()) {
         servedLocationIds.add(stop.locationId.toString());
         totalServiceTime += stop.serviceTime || 0;
 
-        // ✅ Time window metrics
-        if (useTimeWindows && stop.requiredStartTime && stop.requiredEndTime) {
+        if (useTimeWindows && stop.timeWindowStart != null && stop.timeWindowEnd != null) {
           const arrival = stop.arrivalTime || 0;
-          if (arrival >= stop.requiredStartTime && arrival <= stop.requiredEndTime) {
+          if (arrival >= stop.timeWindowStart && arrival <= stop.timeWindowEnd) {
             onTimeDeliveries++;
-          } else if (arrival > stop.requiredEndTime) {
-            totalArrivalDelay += arrival - stop.requiredEndTime;
+          } else if (arrival > stop.timeWindowEnd) {
+            totalArrivalDelay += arrival - stop.timeWindowEnd;
           }
         }
       }
     });
   });
 
+  // Calculate Fixed Costs (Once per physical vehicle)
+  let fixedCost = 0;
+  usedVehicleIds.forEach(vId => {
+      const v = vehicles.find(veh => veh._id.toString() === vId);
+      if (v) {
+          // Tiered fixed costs based on capacity
+          if (v.capacity <= 1000) fixedCost += 250;
+          else if (v.capacity <= 4000) fixedCost += 450;
+          else fixedCost += 700;
+      }
+  });
+
   const totalLocations = locations.filter(l => !l.isDepot).length;
   const totalVehicleCapacity = vehicles.reduce((sum, v) => sum + ((v.capacity || 0) * (v.count || 1)), 0);
   const servedCount = servedLocationIds.size;
-
-  const avgStopsPerRoute = routes.length ? totalStops / routes.length : 0;
-  const avgDurationPerRoute = routes.length ? totalDuration / routes.length : 0;
-  const avgDistancePerRoute = routes.length ? totalDistance / routes.length : 0;
-  const avgServiceTimePerStop = totalStops > 0 ? totalServiceTime / totalStops : 0;
-  const avgDelayPerStop = totalStops > 0 ? totalArrivalDelay / totalStops : 0;
-  const avgLoadUtilization = vehicles.length > 0 ? (totalDemandServed / totalVehicleCapacity) * 100 : 0;
-
-  const onTimeRate = useTimeWindows && totalStops > 0 ? (onTimeDeliveries / totalStops) * 100 : null;
 
   return {
     totalDistance,
     totalDuration,
     totalDemandServed,
+    totalCost: variableCost + fixedCost,
     totalLocationsServed: servedCount,
     coveragePercentage: totalLocations > 0 ? (servedCount / totalLocations) * 100 : 0,
-    vehicleUtilization: avgLoadUtilization,
     routesCount: routes.length,
-    avgStopsPerRoute,
-    avgDurationPerRoute,
-    avgDistancePerRoute,
-    avgServiceTimePerStop,
-    avgDelayPerStop,
-    avgDeliveryTimeMinutes: avgServiceTimePerStop / 60,
-    onTimeRate
+    onTimeRate: useTimeWindows && totalStops > 0 ? (onTimeDeliveries / totalStops) * 100 : null,
+    totalTimeViolations: routes.reduce((sum, r) => sum + (r.timeViolationCount || 0), 0)
   };
 }
 
@@ -682,52 +698,7 @@ exports.updateStopStatus = async (req, res) => {
 /**
  * Calculates key performance metrics for a set of routes.
  */
-function calculateRouteMetrics(routes, locations, vehicles, depotId) {
-  let totalDistance = 0, totalDuration = 0, totalDemandServed = 0, totalCost = 0;
-  const servedLocationIds = new Set();
-
-  routes.forEach(route => {
-    totalDistance += route.distance || 0;
-    totalDuration += route.duration || 0;
-    totalDemandServed += route.totalCapacity || 0;
-
-    // --- COST CALCULATION ---
-    let cost = 0;
-    if (route.vehicle) {
-      const v = vehicles.find(veh => veh._id.toString() === route.vehicle.toString());
-      if (v) {
-        // Use vehicle-specific rates or defaults
-        const fuelRate = v.fuel_cost_per_km !== undefined ? v.fuel_cost_per_km : 10;
-        const driverRate = v.driver_cost_per_km !== undefined ? v.driver_cost_per_km : 8;
-
-        // Cost = Distance * (Fuel + Driver)
-        cost = (route.distance || 0) * (fuelRate + driverRate);
-      }
-    }
-    route.cost = Math.round(cost); // Store on route (rounded)
-    totalCost += cost;
-
-    route.stops.forEach(stop => {
-      if (stop.locationId && stop.locationId.toString() !== depotId.toString()) {
-        servedLocationIds.add(stop.locationId.toString());
-      }
-    });
-  });
-
-  const totalLocations = locations.filter(l => !l.isDepot).length;
-  const totalVehicleCapacity = vehicles.reduce((sum, v) => sum + ((v.capacity || 0) * (v.count || 1)), 0);
-
-  return {
-    totalDistance,
-    totalDuration,
-    totalCost: Math.round(totalCost), // Return total cost
-    totalDemandServed,
-    totalLocationsServed: servedLocationIds.size,
-    coveragePercentage: totalLocations > 0 ? (servedLocationIds.size / totalLocations) * 100 : 0,
-    vehicleUtilization: totalVehicleCapacity > 0 ? (totalDemandServed / totalVehicleCapacity) * 100 : 0,
-    routesCount: routes.length,
-  };
-}
+// Duplicate removed. Using consolidated version above.
 
 /**
  * Selects the best algorithm result based on coverage and then distance.

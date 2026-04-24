@@ -50,7 +50,8 @@ const RouteTimeline = ({ route }) => {
           const status = stop.status || 'Pending';
 
           const rType = (stop.road_type || 'STANDARD').toUpperCase();
-          const isLate = stop.timeWindowEnd !== null && stop.arrivalTime > stop.timeWindowEnd;
+          const goalTime = stop.endTimeWindowSeconds ?? stop.timeWindowEnd ?? stop.goalTime;
+          const isLate = goalTime !== null && goalTime !== undefined && stop.arrivalTime > goalTime;
 
           return (
             <div key={index} className="relative pl-6">
@@ -128,9 +129,13 @@ const RouteTimeline = ({ route }) => {
                           <FaClock className="text-xs" /> Goal Window
                         </span>
                         <span className="font-mono text-xs font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 inline-block">
-                          {stop.timeWindowStart != null && stop.timeWindowEnd != null 
-                            ? `${formatTime(stop.timeWindowStart)} - ${formatTime(stop.timeWindowEnd)}`
-                            : 'Unrestricted'}
+                          {(() => {
+                            const start = stop.startTimeWindowSeconds ?? stop.timeWindowStart;
+                            const end = stop.endTimeWindowSeconds ?? stop.timeWindowEnd ?? stop.goalTime;
+                            return (start != null && end != null) 
+                              ? `${formatTime(start)} - ${formatTime(end)}`
+                              : 'Unrestricted';
+                          })()}
                         </span>
                       </div>
                     </>
@@ -244,11 +249,16 @@ const OptimizationDetail = () => {
     
     // Inject sustainability metrics
     const dist = base.totalDistance || 0;
-    // 🚩 Aggregate Infrastructure Violations
+    // 🚩 Aggregate Infrastructure & Time Violations
     let totalViolations = 0;
+    let timeViolations = 0;
     base.routes?.forEach(route => {
         const v = optimization.vehicles?.find(veh => veh._id === route.vehicle || veh._id.toString() === route.vehicle);
         const vType = (v?.vehicle_type || 'LARGE').toUpperCase();
+        
+        // Use pre-calculated violation count if available, otherwise fallback to local calculation
+        timeViolations += (route.timeViolationCount || 0);
+
         route.stops?.forEach(stop => {
             const rType = (stop.road_type || 'STANDARD').toUpperCase();
             if (rType === 'NARROW' && vType !== 'SMALL') totalViolations++;
@@ -261,6 +271,7 @@ const OptimizationDetail = () => {
       totalCO2: dist * 0.16,
       co2Saved: dist * 0.05,
       geoViolations: totalViolations,
+      timeViolations: timeViolations,
       isInfrastructureAware: true
     };
   }, [optimization, selectedResultIndex]);
@@ -418,6 +429,9 @@ const OptimizationDetail = () => {
               <p className="text-base font-bold text-slate-900 dark:text-white truncate" title={activeResult?.algorithm}>
                 {activeResult?.algorithm || 'Standard Heuristic'}
               </p>
+              <p className="text-[9px] font-black text-indigo-500 uppercase mt-0.5">
+                Time Windows: {activeResult.routes?.[0]?.timeWindowApplied ? 'ENABLED' : 'DISABLED'}
+              </p>
             </div>
           </div>
 
@@ -462,7 +476,13 @@ const OptimizationDetail = () => {
             <div>
               <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Asset Deployment</p>
               <p className="text-lg font-bold text-slate-900 dark:text-white">
-                {activeResult?.routes?.length || 0} Routes / {optimization?.vehicles?.length || 0} Fleet
+                {(() => {
+                    const physicalVehicles = new Set();
+                    activeResult.routes?.forEach(r => {
+                        if (r.vehicle) physicalVehicles.add(r.vehicle.toString().split('_T')[0]);
+                    });
+                    return `${physicalVehicles.size} Vehicles (${activeResult.routes?.length || 0} Trips)`;
+                })()}
               </p>
             </div>
           </div>
@@ -475,6 +495,18 @@ const OptimizationDetail = () => {
               <p className={`${activeResult.geoViolations > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} text-[10px] font-bold uppercase tracking-wider`}>Geo-Compliance</p>
               <p className={`text-lg font-bold ${activeResult.geoViolations > 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
                 {activeResult.geoViolations > 0 ? `${activeResult.geoViolations} Violations` : '100% Safe'}
+              </p>
+            </div>
+          </div>
+
+          <div className={`${activeResult.timeViolations > 0 ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/40' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/40'} p-5 rounded-2xl border shadow-sm flex items-center gap-4`}>
+            <div className={`w-10 h-10 ${activeResult.timeViolations > 0 ? 'bg-amber-500' : 'bg-emerald-500'} text-white rounded-xl flex items-center justify-center text-lg`}>
+              <FaClock />
+            </div>
+            <div>
+              <p className={`${activeResult.timeViolations > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} text-[10px] font-bold uppercase tracking-wider`}>Time Compliance</p>
+              <p className={`text-lg font-bold ${activeResult.timeViolations > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                {activeResult.timeViolations > 0 ? `${activeResult.timeViolations} Lates` : 'On-Time'}
               </p>
             </div>
           </div>
@@ -501,10 +533,6 @@ const OptimizationDetail = () => {
             return (
               <>
                 <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                  <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Fulfillment</div>
-                  <div className="text-xl font-bold text-slate-800 dark:text-slate-200">{totalStops} / {optimization.locations.length - 1}</div>
-                </div>
-                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
                   <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Load Efficiency</div>
                   <div className={`text-xl font-bold ${loadEfficiency > 100 ? 'text-red-600 animate-pulse' : 'text-green-600 dark:text-green-400'}`}>
                     {loadEfficiency.toFixed(1)}%
@@ -519,19 +547,32 @@ const OptimizationDetail = () => {
                   <div className="text-xs font-semibold text-slate-500 text-transform uppercase">Real Ops. Cost</div>
                   <div className="text-xl font-bold text-green-700 dark:text-green-400">
                     {(() => {
+                        // Priority 1: Use pre-calculated backend cost (handles multi-trip deduplication)
+                        if (activeResult.totalCost) return `₹${Number(activeResult.totalCost).toFixed(2)}`;
+                        
+                        // Priority 2: Fallback logic (refined for multi-trip)
                         const getFixedCost = (capacity) => {
                             if (capacity <= 1000) return 250;
                             if (capacity <= 4000) return 450;
                             return 700;
                         };
-                        const variableCost = activeResult.totalCost || 0;
+                        const variableCost = activeResult.totalCost || 0; 
                         let fixedCost = 0;
-                        const uniqueVehicles = new Set((activeResult.routes || []).map(r => r.vehicle).filter(Boolean));
-                        uniqueVehicles.forEach(vId => {
+                        
+                        // Deduplicate vehicles by stripping _T1, _T2 suffixes to avoid double-charging multi-trips
+                        const physicalVehicles = new Set();
+                        (activeResult.routes || []).forEach(r => {
+                            if (r.vehicle) physicalVehicles.add(r.vehicle.toString().split('_T')[0]);
+                        });
+                        
+                        physicalVehicles.forEach(vId => {
                             const v = optimization.vehicles?.find(veh => veh._id === vId || veh._id.toString() === vId);
                             fixedCost += getFixedCost(v?.capacity || 0);
                         });
-                        return `₹${Number(variableCost + fixedCost).toFixed(2)}`;
+                        
+                        // Note: If activeResult.totalCost is 0, we use distance-based fallback for variable
+                        const distBasedVariable = variableCost || (activeResult.totalDistance * 18); // fallback ₹18/km
+                        return `₹${Number(distBasedVariable + fixedCost).toFixed(2)}`;
                     })()}
                   </div>
                   <div className="text-xs text-slate-400">Fixed + Variable</div>
@@ -585,8 +626,8 @@ const OptimizationDetail = () => {
                       <FaCogs />
                     </div>
                     <div>
-                      <p className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">Strategy Selection</p>
-                      <p className="text-white font-bold text-sm">Optimization Engine</p>
+                      <p className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">Select Strategy</p>
+                      <p className="text-white font-bold text-sm">Algorithm Results</p>
                     </div>
                   </div>
                 </div>
@@ -608,7 +649,9 @@ const OptimizationDetail = () => {
 
             <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/10">
-                <h3 className="font-bold text-xs uppercase tracking-widest text-slate-500">Logistics Manifest</h3>
+                <div className="flex flex-col">
+                  <h3 className="font-bold text-xs uppercase tracking-widest text-slate-500">Logistics Manifest</h3>
+                </div>
                 <span className="text-[10px] font-black text-blue-600 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-full uppercase">
                   {activeResult.routes?.length || 0} Routes
                 </span>
@@ -648,14 +691,16 @@ const RouteCard = ({ route, index, vehicles = [], drivers = [], isSelected, onSe
   const isOverloaded = (route?.totalCapacity || 0) > (vehicle?.capacity || 0);
 
   // 🚩 Calculate Route Violations for this specific vehicle
-  const geoViolations = useMemo(() => {
-    return (route.stops || []).filter(stop => {
-        const rType = (stop.road_type || 'STANDARD').toUpperCase();
-        if (rType === 'NARROW' && vType !== 'SMALL') return true;
-        if (rType === 'STANDARD' && vType === 'LARGE') return true;
-        return false;
-    }).length;
-  }, [route.stops, vType]);
+    const geoViolations = useMemo(() => {
+        return (route.stops || []).filter(stop => {
+            const rType = (stop.road_type || 'STANDARD').toUpperCase();
+            if (rType === 'NARROW' && vType !== 'SMALL') return true;
+            if (rType === 'STANDARD' && vType === 'LARGE') return true;
+            return false;
+        }).length;
+    }, [route.stops, vType]);
+
+    const timeViolations = route.timeViolationCount || 0;
 
   return (
     <div className={`bg-white dark:bg-slate-800 rounded-2xl border transition-all overflow-hidden mb-4 ${isSelected ? 'border-blue-500 shadow-lg shadow-blue-500/10' : 'border-slate-200 dark:border-slate-700 shadow-sm'}`}>
@@ -676,7 +721,12 @@ const RouteCard = ({ route, index, vehicles = [], drivers = [], isSelected, onSe
                </span>
                {geoViolations > 0 && (
                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-red-50 text-red-600 border border-red-200 flex items-center gap-1">
-                   <FaExclamationTriangle className="text-[8px]" /> {geoViolations} Geo Violation
+                   <FaExclamationTriangle className="text-[8px]" /> {geoViolations} Geo
+                 </span>
+               )}
+               {timeViolations > 0 && (
+                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200 flex items-center gap-1">
+                   <FaClock className="text-[8px]" /> {timeViolations} Late
                  </span>
                )}
                {isOverloaded && (

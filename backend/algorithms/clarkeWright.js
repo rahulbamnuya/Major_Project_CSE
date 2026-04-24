@@ -1,16 +1,13 @@
-const { calculateDistance } = require('../utils/optimizationUtils');
+const { calculateDistance, getDistanceMatrix } = require('../utils/optimizationUtils');
 const { improveRouteWithLocalSearch } = require('./localSearch');
 
 // =================================================================
 // CONSTANTS
 // =================================================================
-// =================================================================
-// CONSTANTS
-// =================================================================
-const DEFAULT_SPEED_KMH = 40; // Fallback if not provided
+const DEFAULT_SPEED_KMH = 40;
 const TRAFFIC_FACTOR = 1.25;
 const DEPOT_START_TIME_SECONDS = 6 * 3600; // 6:00 AM
-const DEPOT_END_TIME_SECONDS = 22 * 3600; // 10:00 PM (increased for multi-trip)
+const DEPOT_END_TIME_SECONDS = 22 * 3600; // 10:00 PM
 const BASE_SERVICE_TIME_SECONDS = 3 * 60; // 3 minutes
 const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60; // 10 units per minute
 
@@ -25,34 +22,27 @@ const computeTravelTime = (distanceMeters, speedKmh) =>
 const formatTimeWindow = (start, end) => ({
   startTimeWindowSeconds: start != null ? start * 60 : DEPOT_START_TIME_SECONDS,
   endTimeWindowSeconds: end != null ? end * 60 : DEPOT_END_TIME_SECONDS,
+  timeWindowStart: start != null ? start * 60 : DEPOT_START_TIME_SECONDS,
+  timeWindowEnd: end != null ? end * 60 : DEPOT_END_TIME_SECONDS,
 });
 
 // =================================================================
 // MAIN FUNCTION
 // =================================================================
-// FIX 1: The function name now matches what the controller imports.
-exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, options = {}) => {
+exports.clarkeWrightAlgorithmWithTimeWindows = async (vehicles, locations, depot, options = {}) => {
   const useTimeWindows = options.useTimeWindows || false;
   const avgSpeedKmh = options.avgSpeedKmh || DEFAULT_SPEED_KMH;
 
   console.log(`🚚 Running Clarke-Wright Algorithm (Time Windows: ${useTimeWindows}, Speed: ${avgSpeedKmh}km/h)...`);
 
-  // FIX 2: Combine depot and locations to build a complete distance matrix.
+  // Combine depot and locations to build a complete distance matrix.
   const allNodes = [depot, ...locations];
   const depotId = toId(depot._id);
 
   // -----------------------------------------------------------------
-  // Build distance matrix from ALL nodes (depot + locations)
+  // Build distance matrix (Try OSRM Road Data first, then Haversine)
   // -----------------------------------------------------------------
-  const distances = {};
-  allNodes.forEach((l1) => {
-    const id1 = toId(l1._id);
-    distances[id1] = {};
-    allNodes.forEach((l2) => {
-      const id2 = toId(l2._id);
-      distances[id1][id2] = calculateDistance(l1.latitude, l1.longitude, l2.latitude, l2.longitude);
-    });
-  });
+  const distances = await getDistanceMatrix(allNodes);
 
   const nonDepot = locations.filter((l) => toId(l._id) !== depotId);
   const maxCapacity = Math.max(...vehicles.map((v) => v.capacity || 0));
@@ -114,13 +104,33 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
   const savings = [];
   for (let i = 0; i < nonDepot.length; i++) {
     for (let j = i + 1; j < nonDepot.length; j++) {
-      const li = nonDepot[i];
-      const lj = nonDepot[j];
-      const saving =
-        distances[depotId][toId(li._id)] +
-        distances[depotId][toId(lj._id)] -
-        distances[toId(li._id)][toId(lj._id)];
-      savings.push({ i: li, j: lj, saving });
+      const l1 = nonDepot[i];
+      const l2 = nonDepot[j];
+      const id1 = toId(l1._id);
+      const id2 = toId(l2._id);
+
+      // --- ENHANCED SAVINGS LOGIC (Smarter grouping) ---
+      const basicSaving = distances[depotId][id1] + distances[depotId][id2] - distances[id1][id2];
+
+      // Angular factor: group locations in the same direction
+      const angle1 = Math.atan2(l1.latitude - depot.latitude, l1.longitude - depot.longitude);
+      const angle2 = Math.atan2(l2.latitude - depot.latitude, l2.longitude - depot.longitude);
+      const angularDiff = Math.abs(angle1 - angle2);
+      const angularBonus = Math.min(angularDiff, 2 * Math.PI - angularDiff) / Math.PI;
+
+      // Capacity Factor: prioritize merges that fill a truck better
+      const combinedDemand = (l1.demand || 0) + (l2.demand || 0);
+      const maxVehicleCap = vehicles.length > 0 ? Math.max(...vehicles.map(v => v.capacity || 0)) : 6000;
+      const capBonus = combinedDemand <= maxVehicleCap ? 1 : Math.max(0.1, maxVehicleCap / combinedDemand);
+
+      // Final enhanced value
+      const sVal = basicSaving * (1 + (1 - angularBonus) * 0.15) * capBonus;
+
+      savings.push({
+        i: l1,
+        j: l2,
+        saving: sVal
+      });
     }
   }
   savings.sort((a, b) => b.saving - a.saving);
@@ -128,7 +138,7 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
   // -----------------------------------------------------------------
   // Step 3: Merge Routes (WITH INFRASTRUCTURE CAPACITY CHECKS)
   // -----------------------------------------------------------------
-  
+
   // Calculate max possible capacity for each infrastructure tier
   const getVehType = (v) => (v.vehicle_type || '').toUpperCase();
   const maxCap = {
@@ -153,10 +163,10 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
     const combinedStops = [...rI.stops.slice(0, -1), ...rJ.stops.slice(1)];
     let combinedStrictest = 'WIDE';
     combinedStops.forEach(stop => {
-       const loc = locations.find(l => toId(l._id) === toId(stop.locationId));
-       const rt = (loc?.road_type || 'STANDARD').toUpperCase();
-       if (rt === 'NARROW') combinedStrictest = 'NARROW';
-       else if (rt === 'STANDARD' && combinedStrictest !== 'NARROW') combinedStrictest = 'STANDARD';
+      const loc = locations.find(l => toId(l._id) === toId(stop.locationId));
+      const rt = (loc?.road_type || 'STANDARD').toUpperCase();
+      if (rt === 'NARROW') combinedStrictest = 'NARROW';
+      else if (rt === 'STANDARD' && combinedStrictest !== 'NARROW') combinedStrictest = 'STANDARD';
     });
 
     const combinedDemand = rI.totalCapacity + rJ.totalCapacity;
@@ -164,7 +174,7 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
 
     // CRITICAL: Reject merge if demand exceeds the largest COMPATIBLE vehicle
     if (combinedDemand > allowedMaxCap) {
-        continue; 
+      continue;
     }
 
     // Merge is valid
@@ -176,9 +186,9 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
 
     recomputeTimesAndDistance(mergedRoute, distances, useTimeWindows, avgSpeedKmh);
 
-    // IMPROVEMENT: Keep all merges to avoid dropping customers. 
-    // Lateness is now a metric, not a filter.
-    if (!mergedRoute.isViolated || true) {
+    // Reverted: Allow all merges to maintain high fulfillment. 
+    // Lateness will be shown in the UI but won't block the route creation.
+    if (true || !mergedRoute.isViolated) {
       routes = routes.filter(r => r !== rI && r !== rJ);
       routes.push(mergedRoute);
     }
@@ -215,7 +225,9 @@ exports.clarkeWrightAlgorithmWithTimeWindows = (vehicles, locations, depot, opti
 // =================================================================
 function recomputeTimesAndDistance(route, distances, useTimeWindows, speedKmh) {
   let totalDist = 0;
-  route.isViolated = false; // Flag to track feasibility
+  route.isViolated = false; 
+  route.timeViolationCount = 0;
+  route.timeWindowApplied = useTimeWindows;
 
   // Initialize depot times
   route.stops[0].arrivalTime = DEPOT_START_TIME_SECONDS;
@@ -232,10 +244,13 @@ function recomputeTimesAndDistance(route, distances, useTimeWindows, speedKmh) {
     let arrival = prevStop.departureTime + travelTime;
     let waitingTime = 0;
 
-    if (useTimeWindows && currentStop.startTimeWindowSeconds != null) {
-      const startTW = currentStop.startTimeWindowSeconds;
-      const endTW = currentStop.endTimeWindowSeconds;
+    const startTW = currentStop.startTimeWindowSeconds;
+    const endTW = currentStop.endTimeWindowSeconds;
+    
+    // Always provide goalTime for UI even if windows not "applied" for logic
+    currentStop.goalTime = endTW;
 
+    if (useTimeWindows && startTW != null) {
       if (arrival < startTW) {
         waitingTime = startTW - arrival;
         arrival = startTW;
@@ -243,6 +258,8 @@ function recomputeTimesAndDistance(route, distances, useTimeWindows, speedKmh) {
       if (arrival > endTW) {
         console.warn(`⚠️ Route violates window at ${currentStop.locationName}. Arrival: ${arrival.toFixed(0)}, End: ${endTW}`);
         route.isViolated = true;
+        route.timeViolationCount++;
+        currentStop.isLate = true;
       }
     }
 
@@ -253,6 +270,10 @@ function recomputeTimesAndDistance(route, distances, useTimeWindows, speedKmh) {
     currentStop.arrivalTime = Math.round(arrival);
     currentStop.waitingTime = Math.round(waitingTime);
     currentStop.departureTime = Math.round(departure);
+
+    // Ensure the frontend has access to the target windows
+    currentStop.timeWindowStart = startTW;
+    currentStop.timeWindowEnd = endTW;
   }
 
   // Check final return to depot against depot's closing time
@@ -260,6 +281,8 @@ function recomputeTimesAndDistance(route, distances, useTimeWindows, speedKmh) {
   if (lastStop.arrivalTime > DEPOT_END_TIME_SECONDS) {
     console.warn(`⚠️ Route violates depot closing time.`);
     route.isViolated = true;
+    route.timeViolationCount++;
+    lastStop.isLate = true;
   }
 
   route.distance = totalDist;

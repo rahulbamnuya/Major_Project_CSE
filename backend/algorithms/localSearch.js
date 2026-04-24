@@ -20,7 +20,12 @@ exports.improveRouteWithLocalSearch=(route, distances, speedKmh) =>{
       const b = seq[i + 1];
       const ai = toId(a);
       const bi = toId(b);
-      d += distances[ai]?.[bi] ?? calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+      const dist = distances[ai]?.[bi];
+      if (dist !== undefined && dist !== null) {
+        d += dist;
+      } else {
+        d += calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+      }
     }
     return d;
   };
@@ -104,7 +109,12 @@ exports.improveRouteWithLocalSearch=(route, distances, speedKmh) =>{
     const b = route.stops[i + 1];
     const ai = toId(a);
     const bi = toId(b);
-    totalDistance += distances[ai]?.[bi] ?? calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+    const dist = distances[ai]?.[bi];
+    if (dist !== undefined && dist !== null) {
+      totalDistance += dist;
+    } else {
+      totalDistance += calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+    }
   }
   route.distance = totalDistance;
   route.duration = Math.round((totalDistance / speedKmh) * 60);
@@ -124,7 +134,12 @@ exports.enhancedLocalSearch=(route, distances, speedKmh) =>{
      const b = seq[i + 1];
      const ai = toId(a);
      const bi = toId(b);
-     d += distances[ai]?.[bi] ?? calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+     const dist = distances[ai]?.[bi];
+     if (dist !== undefined && dist !== null) {
+       d += dist;
+     } else {
+       d += calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+     }
    }
    return d;
  };
@@ -179,7 +194,12 @@ exports.enhancedLocalSearch=(route, distances, speedKmh) =>{
    const b = route.stops[i + 1];
    const ai = toId(a);
    const bi = toId(b);
-   totalDistance += distances[ai]?.[bi] ?? calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+    const dist = distances[ai]?.[bi];
+    if (dist !== undefined && dist !== null) {
+      totalDistance += dist;
+    } else {
+      totalDistance += calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+    }
  }
  route.distance = totalDistance;
  route.duration = Math.round((totalDistance / speedKmh) * 60);

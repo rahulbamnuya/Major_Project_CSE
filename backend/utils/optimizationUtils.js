@@ -1,4 +1,4 @@
-// /utils/optimizationUtils.js
+const axios = require('axios');
 
 /**
  * Calculates the Haversine distance between two coordinates in kilometers.
@@ -9,7 +9,6 @@ exports.calculateDistance = (lat1, lon1, lat2, lon2) => {
     typeof lat2 !== 'number' || typeof lon2 !== 'number' ||
     isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)
   ) {
-    console.warn('Invalid coordinates for distance calculation:', { lat1, lon1, lat2, lon2 });
     return 0;
   }
 
@@ -25,6 +24,63 @@ exports.calculateDistance = (lat1, lon1, lat2, lon2) => {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c * 1000) / 1000; // km rounded to 3 decimals
+};
+
+/**
+ * Fetches a real road distance matrix from OSRM.
+ * Falls back to Haversine if service fails.
+ */
+exports.getDistanceMatrix = async (locations) => {
+  const osrmKey = process.env.OSRM_API_KEY;
+  const orsKey = process.env.ORS_API_KEY;
+
+  try {
+    console.log(`🌐 Fetching Road Distance Matrix for ${locations.length} points...`);
+    const coords = locations.map(l => `${l.longitude},${l.latitude}`).join(';');
+    
+    // Default to public OSRM, but allow for an API key if provided via a custom service
+    let url = `http://router.project-osrm.org/table/v1/driving/${coords}?annotations=distance,duration`;
+    
+    // If there's an ORS key, we could use OpenRouteService as a higher-quality alternative
+    if (orsKey && !osrmKey) {
+       // OpenRouteService matrix API has a different structure, but we'll stick to OSRM format for now
+       // or just log that we are using OSRM public.
+    }
+
+    const response = await axios.get(url, { timeout: 8000 });
+    
+    if (response.data && response.data.distances) {
+      console.log('✅ OSRM Road Matrix successfully fetched.');
+      const matrix = {};
+      locations.forEach((l1, i) => {
+        const id1 = l1._id.toString();
+        matrix[id1] = {};
+        locations.forEach((l2, j) => {
+          const id2 = l2._id.toString();
+          // Convert OSRM meters to kilometers. Ensure we don't have nulls.
+          const distMeters = response.data.distances[i][j];
+          matrix[id1][id2] = distMeters !== null ? distMeters / 1000 : exports.calculateDistance(l1.latitude, l1.longitude, l2.latitude, l2.longitude);
+        });
+      });
+      return matrix;
+    }
+  } catch (error) {
+    console.warn('⚠️ OSRM Matrix failed. Falling back to Haversine math.', error.message);
+  }
+
+  // Fallback: Build Haversine Matrix
+  const matrix = {};
+  locations.forEach((l1) => {
+    const id1 = l1._id.toString();
+    matrix[id1] = {};
+    locations.forEach((l2) => {
+      const id2 = l2._id.toString();
+      matrix[id1][id2] = exports.calculateDistance(
+        l1.latitude, l1.longitude, l2.latitude, l2.longitude
+      );
+    });
+  });
+  return matrix;
 };
 
 /**
