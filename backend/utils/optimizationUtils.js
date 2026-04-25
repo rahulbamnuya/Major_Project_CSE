@@ -26,6 +26,32 @@ exports.calculateDistance = (lat1, lon1, lat2, lon2) => {
   return Math.round(R * c * 1000) / 1000; // km rounded to 3 decimals
 };
 
+const fs = require('fs');
+const path = require('path');
+
+const CACHE_FILE = path.join(__dirname, '..', 'matrix_cache.json');
+
+// Load cache from disk on startup
+let matrixCache = new Map();
+try {
+  if (fs.existsSync(CACHE_FILE)) {
+    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    matrixCache = new Map(Object.entries(data));
+    console.log(`📂 Loaded ${matrixCache.size} matrices from disk cache.`);
+  }
+} catch (err) {
+  console.warn('⚠️ Could not load matrix cache from disk:', err.message);
+}
+
+const saveCacheToDisk = () => {
+  try {
+    const data = Object.fromEntries(matrixCache);
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(data), 'utf8');
+  } catch (err) {
+    console.warn('⚠️ Could not save matrix cache to disk:', err.message);
+  }
+};
+
 /**
  * Fetches a real road distance matrix from OSRM.
  * Falls back to Haversine if service fails.
@@ -33,6 +59,15 @@ exports.calculateDistance = (lat1, lon1, lat2, lon2) => {
 exports.getDistanceMatrix = async (locations) => {
   const osrmKey = process.env.OSRM_API_KEY;
   const orsKey = process.env.ORS_API_KEY;
+
+  // Create a unique key for this set of locations to check cache
+  // Using location IDs and total count to ensure uniqueness
+  const cacheKey = `matrix_${locations.length}_` + locations.map(l => l._id.toString()).sort().join('|');
+  
+  if (matrixCache.has(cacheKey)) {
+    console.log('⚡ Using cached Distance Matrix (Disk/Memory).');
+    return matrixCache.get(cacheKey);
+  }
 
   try {
     console.log(`🌐 Fetching Road Distance Matrix for ${locations.length} points...`);
@@ -43,11 +78,12 @@ exports.getDistanceMatrix = async (locations) => {
     
     // If there's an ORS key, we could use OpenRouteService as a higher-quality alternative
     if (orsKey && !osrmKey) {
-       // OpenRouteService matrix API has a different structure, but we'll stick to OSRM format for now
-       // or just log that we are using OSRM public.
+       // Note: OpenRouteService has different API structure, keeping OSRM for now
+       // but we could implement ORS here if OSRM continues to fail.
     }
 
-    const response = await axios.get(url, { timeout: 8000 });
+    // Increased timeout from 8s to 30s for better reliability
+    const response = await axios.get(url, { timeout: 30000 });
     
     if (response.data && response.data.distances) {
       console.log('✅ OSRM Road Matrix successfully fetched.');
@@ -57,15 +93,18 @@ exports.getDistanceMatrix = async (locations) => {
         matrix[id1] = {};
         locations.forEach((l2, j) => {
           const id2 = l2._id.toString();
-          // Convert OSRM meters to kilometers. Ensure we don't have nulls.
           const distMeters = response.data.distances[i][j];
           matrix[id1][id2] = distMeters !== null ? distMeters / 1000 : exports.calculateDistance(l1.latitude, l1.longitude, l2.latitude, l2.longitude);
         });
       });
+      
+      // Store in cache
+      matrixCache.set(cacheKey, matrix);
+      saveCacheToDisk(); // Persist to file
       return matrix;
     }
   } catch (error) {
-    console.warn('⚠️ OSRM Matrix failed. Falling back to Haversine math.', error.message);
+    console.warn(`⚠️ OSRM Matrix failed (${error.message}). Falling back to Haversine math.`);
   }
 
   // Fallback: Build Haversine Matrix

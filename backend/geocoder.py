@@ -70,6 +70,13 @@ class GeoIntelligence:
         if not api_key:
             return None, None
 
+        # Check cache first
+        node_ids = sorted([n.id for n in nodes])
+        cache_key = f"matrix_{'|'.join(map(str, node_ids))}"
+        if cache_key in self.cache:
+            print("⚡ Using cached Matrix.")
+            return self.cache[cache_key]['distances'], self.cache[cache_key]['durations']
+
         coords = [[n.lon, n.lat] for n in nodes]
         url = "https://api.openrouteservice.org/v2/matrix/driving-car"
         headers = {
@@ -79,12 +86,21 @@ class GeoIntelligence:
         body = {"locations": coords, "metrics": ["distance", "duration"]}
 
         try:
-            response = requests.post(url, json=body, headers=headers, timeout=10)
+            # Increased timeout to 60s for massive datasets
+            response = requests.post(url, json=body, headers=headers, timeout=60)
             data = response.json()
             
             if 'distances' in data and 'durations' in data:
+                # Save to cache
+                self.cache[cache_key] = {
+                    'distances': data['distances'],
+                    'durations': data['durations']
+                }
+                self.save_cache()
                 return data['distances'], data['durations']
             else:
+                print(f"⚠️ ORS Matrix Warning: {data.get('error', 'Unknown Error')}")
                 return None, None
         except Exception as e:
+            print(f"⚠️ Matrix API Error: {e}")
             return None, None
