@@ -417,7 +417,7 @@ async function runSingleAlgorithm(req, res, context) {
     const { assignedRoutes, unassignedStops } = assignVehiclesToRoutes(routes, vehicles);
     droppedNodes = [...droppedNodes, ...unassignedStops];
 
-    const metrics = calculateRouteMetrics(assignedRoutes, locations, vehicles, depot._id);
+    const metrics = calculateRouteMetrics(assignedRoutes, locations, vehicles, depot._id, useTimeWindows);
 
     const result = {
       algorithm: selectedAlgo.name,

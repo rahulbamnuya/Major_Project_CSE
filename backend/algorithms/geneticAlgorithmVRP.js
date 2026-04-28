@@ -245,10 +245,10 @@ function recomputeRouteMetrics(route, distances, useTimeWindows = false, speedKm
         const fromIdStr = toId(from.locationId);
         const toIdStr = toId(to.locationId);
 
-        const distance = distances[fromIdStr]?.[toIdStr] || calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
+        const distance = distances.distances[fromIdStr]?.[toIdStr] || calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
         totalDistance += distance;
 
-        let travelTime = (distance / speedKmh) * 3600 * TRAFFIC_FACTOR; // seconds
+        let travelTime = distances.durations[fromIdStr]?.[toIdStr] || ((distance / speedKmh) * 3600 * TRAFFIC_FACTOR); // seconds
         let arrivalTime = currentTime + travelTime;
 
         // Service time
@@ -338,10 +338,10 @@ function createRandomSolution(vehicles, locations, depot, distances, useTimeWind
                 order: idx + 1,
                 arrivalTime: 0,
                 serviceTime: 0,
-                startTimeWindowSeconds: loc.startTimeWindowSeconds || DEPOT_START_TIME_SECONDS,
-                endTimeWindowSeconds: loc.endTimeWindowSeconds || DEPOT_END_TIME_SECONDS,
-                timeWindowStart: loc.startTimeWindowSeconds || DEPOT_START_TIME_SECONDS,
-                timeWindowEnd: loc.endTimeWindowSeconds || DEPOT_END_TIME_SECONDS,
+                startTimeWindowSeconds: (loc.timeWindowStart || (loc.timeWindow ? loc.timeWindow[0] : 0)) * 60 || DEPOT_START_TIME_SECONDS,
+                endTimeWindowSeconds: (loc.timeWindowEnd || (loc.timeWindow ? loc.timeWindow[1] : 1440)) * 60 || DEPOT_END_TIME_SECONDS,
+                timeWindowStart: (loc.timeWindowStart || (loc.timeWindow ? loc.timeWindow[0] : 0)) * 60 || DEPOT_START_TIME_SECONDS,
+                timeWindowEnd: (loc.timeWindowEnd || (loc.timeWindow ? loc.timeWindow[1] : 1440)) * 60 || DEPOT_END_TIME_SECONDS,
                 road_type: loc.road_type || 'STANDARD'
             })),
             { locationId: depot._id, locationName: depot.name, latitude: depot.latitude, longitude: depot.longitude, demand: 0, order: slot.locations.length + 1, arrivalTime: 0, serviceTime: 0 }

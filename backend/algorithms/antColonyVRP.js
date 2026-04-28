@@ -90,11 +90,11 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
             if (!nextLocation) break; // no feasible candidate
 
             // safe lookups for distance: fallback to calculateDistance if matrix missing
-            const distEntryFrom = distances[toId(currentLocation._id)];
+            const distEntryFrom = distances.distances[toId(currentLocation._id)];
             const distanceToNext = (distEntryFrom && distEntryFrom[toId(nextLocation._id)]) ??
                 calculateDistance(currentLocation.latitude, currentLocation.longitude, nextLocation.latitude, nextLocation.longitude);
 
-            const travelTime = ((distanceToNext / speedKmh) * 3600) * TRAFFIC_FACTOR;
+            const travelTime = (distances.durations[toId(currentLocation._id)]?.[toId(nextLocation._id)]) ?? (((distanceToNext / speedKmh) * 3600) * TRAFFIC_FACTOR);
             const arrivalTime = currentTime + travelTime;
 
             const demand = nextLocation.demand || 0;
@@ -153,9 +153,9 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
 
         // Return to depot
         const lastId = toId(currentLocation._id);
-        const distFromLast = distances[lastId] && distances[lastId][depotId];
+        const distFromLast = distances.distances[lastId] && distances.distances[lastId][depotId];
         const distanceToDepot = distFromLast ?? calculateDistance(currentLocation.latitude, currentLocation.longitude, depot.latitude, depot.longitude);
-        const travelTimeToDepot = ((distanceToDepot / speedKmh) * 3600) * TRAFFIC_FACTOR;
+        const travelTimeToDepot = distances.durations[lastId]?.[depotId] ?? (((distanceToDepot / speedKmh) * 3600) * TRAFFIC_FACTOR);
         currentTime += travelTimeToDepot;
 
         route.stops.push({
@@ -177,7 +177,7 @@ function constructSolutionForAnt(vehicles, locations, depot, distances, pheromon
             for (let i = 0; i < route.stops.length - 1; i++) {
                 const fromId = toId(route.stops[i].locationId);
                 const toIdStr = toId(route.stops[i + 1].locationId);
-                const d = (distances[fromId] && distances[fromId][toIdStr]) ??
+                const d = (distances.distances[fromId] && distances.distances[fromId][toIdStr]) ??
                     calculateDistance(route.stops[i].latitude, route.stops[i].longitude, route.stops[i + 1].latitude, route.stops[i + 1].longitude);
                 totalDist += d || 0;
             }
@@ -252,17 +252,17 @@ function chooseNextLocation(
         if (rt === 'STANDARD' && vt === 'LARGE') continue;
 
         // guard: distances must exist for current->candidate and candidate->depot, or compute fallback
-        const distCurToCand = (distances[currentId] && distances[currentId][candidateId]) ??
+        const distCurToCand = (distances.distances[currentId] && distances.distances[currentId][candidateId]) ??
             calculateDistance(current.latitude, current.longitude, candidate.latitude, candidate.longitude);
 
-        const distCandToDepot = (distances[candidateId] && distances[candidateId][depotId]) ??
+        const distCandToDepot = (distances.distances[candidateId] && distances.distances[candidateId][depotId]) ??
             calculateDistance(candidate.latitude, candidate.longitude, /*depot will be looked up by caller*/ candidate.latitude, candidate.longitude); // fallback: doesn't matter for check below, we'll compute properly later if used
 
         // If for some reason distCurToCand is falsy, skip candidate
         if (distCurToCand == null || Number.isNaN(distCurToCand)) continue;
 
         // compute arrival and service times
-        const travelTimeToCandidate = ((distCurToCand / speedKmh) * 3600) * TRAFFIC_FACTOR;
+        const travelTimeToCandidate = distances.durations[currentId]?.[candidateId] ?? (((distCurToCand / speedKmh) * 3600) * TRAFFIC_FACTOR);
         const arrivalAtCandidate = currentTime + travelTimeToCandidate;
 
         const serviceTimeRaw = BASE_SERVICE_TIME_SECONDS + ((candidate.demand || 0) / UNITS_PER_SECOND_OF_UNLOADING);
@@ -284,9 +284,9 @@ function chooseNextLocation(
         }
 
         // check return-to-depot feasibility: compute correct travel time to depot
-        const distCandidateToDepot = (distances[candidateId] && distances[candidateId][depotId]) ??
+        const distCandidateToDepot = (distances.distances[candidateId] && distances.distances[candidateId][depotId]) ??
             calculateDistance(candidate.latitude, candidate.longitude, /* assume depot coords unknown here; caller usually had them */ candidate.latitude, candidate.longitude);
-        const travelTimeToDepot = ((distCandidateToDepot / speedKmh) * 3600) * TRAFFIC_FACTOR;
+        const travelTimeToDepot = distances.durations[candidateId]?.[depotId] ?? (((distCandidateToDepot / speedKmh) * 3600) * TRAFFIC_FACTOR);
         const finalArrivalDepot = departureFromCandidate + travelTimeToDepot;
 
         if (finalArrivalDepot > DEPOT_END_TIME_SECONDS) {

@@ -35,9 +35,22 @@ const CACHE_FILE = path.join(__dirname, '..', 'matrix_cache.json');
 let matrixCache = new Map();
 try {
   if (fs.existsSync(CACHE_FILE)) {
-    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-    matrixCache = new Map(Object.entries(data));
-    console.log(`📂 Loaded ${matrixCache.size} matrices from disk cache.`);
+    const rawData = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    
+    // Migration: If the cache is in the old flat format, wrap it in the new structure
+    Object.entries(rawData).forEach(([key, value]) => {
+      if (value && value.distances && value.durations) {
+        matrixCache.set(key, value);
+      } else {
+        // This is an old cache entry. Migrating...
+        matrixCache.set(key, { 
+          distances: value || {}, 
+          durations: {} // Durations will be refetched on next run if empty
+        });
+      }
+    });
+    
+    console.log(`📂 Loaded and migrated ${matrixCache.size} matrices from disk cache.`);
   }
 } catch (err) {
   console.warn('⚠️ Could not load matrix cache from disk:', err.message);
@@ -85,16 +98,25 @@ exports.getDistanceMatrix = async (locations) => {
     // Increased timeout from 8s to 30s for better reliability
     const response = await axios.get(url, { timeout: 30000 });
     
-    if (response.data && response.data.distances) {
-      console.log('✅ OSRM Road Matrix successfully fetched.');
-      const matrix = {};
+    if (response.data && response.data.distances && response.data.durations) {
+      console.log('✅ OSRM Road Matrix & Durations successfully fetched.');
+      const matrix = { distances: {}, durations: {} };
+      
       locations.forEach((l1, i) => {
         const id1 = l1._id.toString();
-        matrix[id1] = {};
+        matrix.distances[id1] = {};
+        matrix.durations[id1] = {};
+        
         locations.forEach((l2, j) => {
           const id2 = l2._id.toString();
+          
+          // Distance in KM
           const distMeters = response.data.distances[i][j];
-          matrix[id1][id2] = distMeters !== null ? distMeters / 1000 : exports.calculateDistance(l1.latitude, l1.longitude, l2.latitude, l2.longitude);
+          matrix.distances[id1][id2] = distMeters !== null ? distMeters / 1000 : exports.calculateDistance(l1.latitude, l1.longitude, l2.latitude, l2.longitude);
+          
+          // Duration in Seconds (OSRM returns seconds)
+          const durationSeconds = response.data.durations[i][j];
+          matrix.durations[id1][id2] = durationSeconds !== null ? durationSeconds : ((matrix.distances[id1][id2] / 40) * 3600); // Fallback to 40km/h
         });
       });
       
@@ -107,16 +129,17 @@ exports.getDistanceMatrix = async (locations) => {
     console.warn(`⚠️ OSRM Matrix failed (${error.message}). Falling back to Haversine math.`);
   }
 
-  // Fallback: Build Haversine Matrix
-  const matrix = {};
+  // Fallback: Build Haversine Matrix (both distance and estimated duration)
+  const matrix = { distances: {}, durations: {} };
   locations.forEach((l1) => {
     const id1 = l1._id.toString();
-    matrix[id1] = {};
+    matrix.distances[id1] = {};
+    matrix.durations[id1] = {};
     locations.forEach((l2) => {
       const id2 = l2._id.toString();
-      matrix[id1][id2] = exports.calculateDistance(
-        l1.latitude, l1.longitude, l2.latitude, l2.longitude
-      );
+      const dist = exports.calculateDistance(l1.latitude, l1.longitude, l2.latitude, l2.longitude);
+      matrix.distances[id1][id2] = dist;
+      matrix.durations[id1][id2] = (dist / 40) * 3600; // Estimated 40km/h
     });
   });
   return matrix;
@@ -132,7 +155,7 @@ exports.calculateTotalCost = (solution, distances) => {
     for (let i = 0; i < route.stops.length - 1; i++) {
       const fromId = toIdLocal(route.stops[i].locationId);
       const toIdStr = toIdLocal(route.stops[i + 1].locationId);
-      routeCost += distances[fromId]?.[toIdStr] || 0;
+      routeCost += distances.distances[fromId]?.[toIdStr] || 0;
     }
     return total + routeCost;
   }, 0);

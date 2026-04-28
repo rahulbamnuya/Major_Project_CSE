@@ -50,113 +50,120 @@ exports.enhancedClarkeWrightAlgorithm = async (vehicles, locations, depot, optio
       const idJ = toId(lj._id);
 
       const getDist = (fId, tId, fLoc, tLoc) => {
-          return distances[fId]?.[tId] ?? calculateDistance(fLoc.latitude, fLoc.longitude, tLoc.latitude, tLoc.longitude);
+          return distances.distances[fId]?.[tId] ?? calculateDistance(fLoc.latitude, fLoc.longitude, tLoc.latitude, tLoc.longitude);
       };
 
-      // Basic C-W Saving: d(D,i) + d(D,j) - d(i,j)
-      const distDI = getDist(depotId, idI, depot, li);
-      const distDJ = getDist(depotId, idJ, depot, lj);
-      const distIJ = getDist(idI, idJ, li, lj);
-      
-      const basicSaving = distDI + distDJ - distIJ;
-
-      // Enhanced factors
-      const angleI = Math.atan2(li.latitude - depot.latitude, li.longitude - depot.longitude);
-      const angleJ = Math.atan2(lj.latitude - depot.latitude, lj.longitude - depot.longitude);
-      const angularDiff = Math.abs(angleI - angleJ);
-      const angularBonus = Math.min(angularDiff, 2 * Math.PI - angularDiff) / Math.PI;
-
-      const demandI = li.demand || 0;
-      const demandJ = lj.demand || 0;
-      const combinedDemand = demandI + demandJ;
-      const maxVehicleCapacity = vehicles.length > 0 ? Math.max(...vehicles.map(v => v.capacity || 0)) : Infinity;
-      const capacityCompatibility = combinedDemand <= maxVehicleCapacity ? 1 : Math.max(0.1, maxVehicleCapacity / combinedDemand);
-
-      const distanceEfficiency = Math.max(0.8, 1 - (distIJ / 50));
-
-      const enhancedSaving = basicSaving *
-        (1 + (1 - angularBonus) * 0.15) *
-        capacityCompatibility *
-        distanceEfficiency;
-
-      savings.push({
-        i: li, j: lj, saving: enhancedSaving
-      });
-    }
-  }
-  savings.sort((a, b) => b.saving - a.saving);
-
-  // Initialize routes (single customer per route)
-  const makeDepotStop = (order) => ({
-    locationId: depot._id,
-    locationName: depot.name,
-    latitude: depot.latitude,
-    longitude: depot.longitude,
-    demand: 0,
-    order,
-    arrivalTime: DEPOT_START_TIME_SECONDS,
-    serviceTime: 0,
-    departureTime: DEPOT_START_TIME_SECONDS
-  });
-
-  const routes = nonDepot.map((loc) => {
-    // Initial calculation for single route
-    // Depot -> Loc -> Depot
-    const distTo = distances[depotId][toId(loc._id)];
-    const distFrom = distances[toId(loc._id)][depotId];
-
-    // Arrival at Loc
-    const travelTime1 = ((distTo / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR;
-    const arrival1 = DEPOT_START_TIME_SECONDS + travelTime1;
-
-    // Service
-    const demand = loc.demand || 0;
-    const serviceTime = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
-
-    // Time Window logic (simplified for initialization)
-    let finalArrival = arrival1;
-    let wait = 0;
-    if (useTimeWindows && loc.startTimeWindowSeconds) {
-      if (finalArrival < loc.startTimeWindowSeconds) {
-        wait = loc.startTimeWindowSeconds - finalArrival;
-        finalArrival = loc.startTimeWindowSeconds;
-      }
-    }
-    const departure1 = finalArrival + serviceTime;
-
-    // Return to Depot
-    const travelTime2 = ((distFrom / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR;
-    const arrivalDepot = departure1 + travelTime2;
-
-    const locTimeWindow = formatTimeWindow(
-        loc.timeWindowStart || (loc.timeWindow ? loc.timeWindow[0] : null),
-        loc.timeWindowEnd || (loc.timeWindow ? loc.timeWindow[1] : null)
+    // --- ENHANCED SAVINGS LOGIC (Time-Aware) ---
+    const locTimeWindowI = formatTimeWindow(
+        li.timeWindowStart || (li.timeWindow ? li.timeWindow[0] : null),
+        li.timeWindowEnd || (li.timeWindow ? li.timeWindow[1] : null)
+    );
+    const locTimeWindowJ = formatTimeWindow(
+        lj.timeWindowStart || (lj.timeWindow ? lj.timeWindow[0] : null),
+        lj.timeWindowEnd || (lj.timeWindow ? lj.timeWindow[1] : null)
     );
 
-    const stops = [
-      {
-        ...makeDepotStop(0),
-        arrivalTime: DEPOT_START_TIME_SECONDS,
-        departureTime: DEPOT_START_TIME_SECONDS
-      },
-      {
-        locationId: loc._id,
-        locationName: loc.name,
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        demand: loc.demand || 0,
-        order: 1,
-        arrivalTime: Math.round(finalArrival),
-        serviceTime: Math.round(serviceTime + wait),
-        departureTime: Math.round(departure1),
-        ...locTimeWindow
-      },
-      {
-        ...makeDepotStop(2),
-        arrivalTime: Math.round(arrivalDepot),
-        departureTime: Math.round(arrivalDepot)
-      }
-    ];
+    const distDI = getDist(depotId, idI, depot, li);
+    const distDJ = getDist(depotId, idJ, depot, lj);
+    const distIJ = getDist(idI, idJ, li, lj);
+    
+    const basicSaving = distDI + distDJ - distIJ;
+
+    // Time Penalty: Don't merge if windows are very far apart
+    let timePenalty = 1.0;
+    if (useTimeWindows) {
+        const midI = (locTimeWindowI.startTimeWindowSeconds + locTimeWindowI.endTimeWindowSeconds) / 2;
+        const midJ = (locTimeWindowJ.startTimeWindowSeconds + locTimeWindowJ.endTimeWindowSeconds) / 2;
+        const timeDiff = Math.abs(midI - midJ) / 3600; // in hours
+        timePenalty = Math.max(0.5, 1.0 - (timeDiff / 12)); // Lose up to 50% saving if windows are 12 hours apart
+    }
+
+    // Enhanced factors
+    const angleI = Math.atan2(li.latitude - depot.latitude, li.longitude - depot.longitude);
+    const angleJ = Math.atan2(lj.latitude - depot.latitude, lj.longitude - depot.longitude);
+    const angularDiff = Math.abs(angleI - angleJ);
+    const angularBonus = Math.min(angularDiff, 2 * Math.PI - angularDiff) / Math.PI;
+
+    const demandI = li.demand || 0;
+    const demandJ = lj.demand || 0;
+    const combinedDemand = demandI + demandJ;
+    const maxVehicleCapacity = vehicles.length > 0 ? Math.max(...vehicles.map(v => v.capacity || 0)) : Infinity;
+    const capacityCompatibility = combinedDemand <= maxVehicleCapacity ? 1 : Math.max(0.1, maxVehicleCapacity / combinedDemand);
+
+    const enhancedSaving = basicSaving *
+      (1 + (1 - angularBonus) * 0.15) *
+      capacityCompatibility *
+      timePenalty;
+
+    savings.push({
+      i: li, j: lj, saving: enhancedSaving
+    });
+  }
+}
+savings.sort((a, b) => b.saving - a.saving);
+
+// Initialize routes (single customer per route)
+const makeDepotStop = (order) => ({
+  locationId: depot._id,
+  locationName: depot.name,
+  latitude: depot.latitude,
+  longitude: depot.longitude,
+  demand: 0,
+  order,
+  arrivalTime: DEPOT_START_TIME_SECONDS,
+  serviceTime: 0,
+  departureTime: DEPOT_START_TIME_SECONDS
+});
+
+const routes = nonDepot.map((loc) => {
+  const locTimeWindow = formatTimeWindow(
+      loc.timeWindowStart || (loc.timeWindow ? loc.timeWindow[0] : null),
+      loc.timeWindowEnd || (loc.timeWindow ? loc.timeWindow[1] : null)
+  );
+
+  const distTo = distances.distances[depotId][toId(loc._id)];
+  const distFrom = distances.distances[toId(loc._id)][depotId];
+  const travelTime1 = distances.durations[depotId]?.[toId(loc._id)] ?? (((distTo / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR);
+  
+  let arrival1 = DEPOT_START_TIME_SECONDS + travelTime1;
+  let wait = 0;
+  if (useTimeWindows && locTimeWindow.startTimeWindowSeconds) {
+    if (arrival1 < locTimeWindow.startTimeWindowSeconds) {
+      wait = locTimeWindow.startTimeWindowSeconds - arrival1;
+      arrival1 = locTimeWindow.startTimeWindowSeconds;
+    }
+  }
+
+  const demand = loc.demand || 0;
+  const serviceTime = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
+  const departure1 = arrival1 + serviceTime;
+  const travelTime2 = distances.durations[toId(loc._id)]?.[depotId] ?? (((distFrom / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR);
+  const arrivalDepot = departure1 + travelTime2;
+
+  const stops = [
+    {
+      ...makeDepotStop(0),
+      arrivalTime: DEPOT_START_TIME_SECONDS,
+      departureTime: DEPOT_START_TIME_SECONDS
+    },
+    {
+      locationId: loc._id,
+      locationName: loc.name,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      demand: loc.demand || 0,
+      order: 1,
+      arrivalTime: Math.round(arrival1),
+      serviceTime: Math.round(serviceTime + wait),
+      departureTime: Math.round(departure1),
+      ...locTimeWindow
+    },
+    {
+      ...makeDepotStop(2),
+      arrivalTime: Math.round(arrivalDepot),
+      departureTime: Math.round(arrivalDepot)
+    }
+  ];
 
     return {
       vehicle: undefined,
@@ -194,10 +201,10 @@ exports.enhancedClarkeWrightAlgorithm = async (vehicles, locations, depot, optio
       const toIdStr = toId(to.locationId);
 
       // Use matrix strictly with robust fallback (preventing 0-dist bugs)
-      const dist = distances[fromId]?.[toIdStr] ?? calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
+      const dist = distances.distances[fromId]?.[toIdStr] ?? calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
       totalDist += dist;
 
-      const travelTime = ((dist / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR;
+      const travelTime = distances.durations[fromId]?.[toIdStr] ?? (((dist / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR);
       let arrival = currentTime + travelTime;
 
       let service = 0;
@@ -318,12 +325,13 @@ exports.enhancedClarkeWrightAlgorithm = async (vehicles, locations, depot, optio
 
     recomputeRouteMetrics(mergedRoute);
 
-    // Reverted: Priority is fulfillment over strict timing.
-    // Replace the two routes with merged one
-    const idx1 = Math.max(rIdxI, rIdxJ);
-    const idx2 = Math.min(rIdxI, rIdxJ);
-    routes.splice(idx1, 1);
-    routes.splice(idx2, 1, mergedRoute);
+    // If time windows are enabled, only accept the merge if it doesn't cause a violation.
+    if (!useTimeWindows || !mergedRoute.isViolated) {
+      const idx1 = Math.max(rIdxI, rIdxJ);
+      const idx2 = Math.min(rIdxI, rIdxJ);
+      routes.splice(idx1, 1);
+      routes.splice(idx2, 1, mergedRoute);
+    }
   }
 
   // Assign Vehicles

@@ -1,0 +1,9 @@
+Metric,Enhanced CW,Modified Clarke-Wright (Proposed Model),Google OR-Tools (Industrial Benchmark)
+Total Distance,80.67 km,135.98 km,101.73 km
+Total Time,40h 5m,36h 4m,39h 12m
+Vehicles Used,3,8,12
+Trips,4,11,14
+Load Efficiency,81.4%,44.9%,56.6%
+Avg Dist/Route,20.2 km,12.4 km,7.3 km
+Time Fulfillment (%),—,—,—
+Operational Cost,₹3552.03,₹6797.67,₹7981.14

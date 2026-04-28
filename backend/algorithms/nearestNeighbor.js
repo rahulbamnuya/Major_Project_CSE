@@ -48,13 +48,14 @@ exports.nearestNeighborAlgorithm = async (vehicles, locations, depot, options = 
     const dist = (a, b) => {
         const idA = toId(a._id || a.locationId);
         const idB = toId(b._id || b.locationId);
-        return distances[idA]?.[idB] ?? calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+        return distances.distances[idA]?.[idB] ?? calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
     };
 
-    // HELPER: Compute travel time in seconds
-    const computeTravelTime = (distanceKm) => {
-        // (Distance in km / Speed in km/h) * 3600 seconds/hour * Traffic
-        return ((distanceKm / speedKmh) * 3600) * TRAFFIC_FACTOR;
+    // HELPER: Compute travel time in seconds (Uses OSM Duration)
+    const computeTravelTime = (a, b, distanceKm) => {
+        const idA = toId(a._id || a.locationId);
+        const idB = toId(b._id || b.locationId);
+        return distances.durations[idA]?.[idB] ?? (((distanceKm / speedKmh) * 3600) * TRAFFIC_FACTOR);
     };
 
     for (const vs of vehicleSlots) {
@@ -96,7 +97,7 @@ exports.nearestNeighborAlgorithm = async (vehicles, locations, depot, options = 
                 if (rt === 'STANDARD' && vt === 'LARGE') continue;
 
                 const travelDistance = dist(currentLocation, loc);
-                const travelTime = computeTravelTime(travelDistance);
+                const travelTime = computeTravelTime(currentLocation, loc, travelDistance);
                 let arrivalTime = currentTime + travelTime;
 
                 // Time window check (Relaxed to avoid dropping nodes)
@@ -119,7 +120,7 @@ exports.nearestNeighborAlgorithm = async (vehicles, locations, depot, options = 
 
             // Arrival / Service / Departure time
             const travelDistBest = dist(currentLocation, best);
-            const travelTimeBest = computeTravelTime(travelDistBest);
+            const travelTimeBest = computeTravelTime(currentLocation, best, travelDistBest);
 
             let arrivalTime = currentTime + travelTimeBest;
             let waitTime = 0;
@@ -158,7 +159,7 @@ exports.nearestNeighborAlgorithm = async (vehicles, locations, depot, options = 
         // Close route back to depot
         if (stops.length > 1) {
             const travelDistanceToDepot = dist(currentLocation, depot);
-            const travelTimeToDepot = computeTravelTime(travelDistanceToDepot);
+            const travelTimeToDepot = computeTravelTime(currentLocation, depot, travelDistanceToDepot);
             const arrivalTimeDepot = currentTime + travelTimeToDepot;
 
             stops.push({

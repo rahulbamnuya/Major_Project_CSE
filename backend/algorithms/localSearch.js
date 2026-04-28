@@ -1,206 +1,132 @@
 // /algorithms/localSearch.js
 const { calculateDistance } = require('../utils/optimizationUtils');
-// exports.improveRouteWithLocalSearch = (route, distances, speedKmh) => {
-//     // ... logic from original file
-// };
 
-exports.improveRouteWithLocalSearch=(route, distances, speedKmh) =>{
-  // Extract non-depot stops
-  console.log("2")
-  if (!route.stops || route.stops.length < 3) return;
+const TRAFFIC_FACTOR = 1.25;
+const BASE_SERVICE_TIME_SECONDS = 3 * 60;
+const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60;
+const DEPOT_START_TIME_SECONDS = 6 * 3600;
+const DEPOT_END_TIME_SECONDS = 22 * 3600;
+
+const toId = (x) => x.locationId.toString();
+
+/**
+ * Checks if a sequence of stops is feasible under time windows.
+ */
+function isSequenceFeasible(seq, distances, speedKmh, useTimeWindows) {
+  if (!useTimeWindows) return true;
+  
+  let currentTime = DEPOT_START_TIME_SECONDS;
+  for (let i = 0; i < seq.length - 1; i++) {
+    const from = seq[i];
+    const to = seq[i+1];
+    const fromId = toId(from);
+    const toIdStr = toId(to);
+
+    const dist = distances.distances[fromId]?.[toIdStr] ?? calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
+    const travelTime = distances.durations[fromId]?.[toIdStr] ?? (((dist / speedKmh) * 3600) * TRAFFIC_FACTOR);
+    let arrival = currentTime + travelTime;
+
+    if (i + 1 < seq.length - 1) { // Customer stop
+      const twStart = to.startTimeWindowSeconds !== undefined ? to.startTimeWindowSeconds : to.timeWindowStart;
+      const twEnd = to.endTimeWindowSeconds !== undefined ? to.endTimeWindowSeconds : to.timeWindowEnd;
+
+      if (twStart !== null && twStart !== undefined && arrival < twStart) arrival = twStart;
+      if (twEnd !== null && twEnd !== undefined && arrival > twEnd) return false; // Infeasible!
+
+      const service = BASE_SERVICE_TIME_SECONDS + ((to.demand || 0) / UNITS_PER_SECOND_OF_UNLOADING);
+      currentTime = arrival + service;
+    } else { // Final depot
+      if (arrival > DEPOT_END_TIME_SECONDS) return false;
+    }
+  }
+  return true;
+}
+
+const calcDist = (seq, distances) => {
+  let d = 0;
+  for (let i = 0; i < seq.length - 1; i++) {
+    const a = seq[i];
+    const b = seq[i + 1];
+    const ai = toId(a);
+    const bi = toId(b);
+    const dist = distances.distances[ai]?.[bi];
+    d += (dist !== undefined && dist !== null) ? dist : calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+  }
+  return d;
+};
+
+exports.improveRouteWithLocalSearch = (route, distances, speedKmh) => {
+  if (!route.stops || route.stops.length < 4) return;
+  const useTimeWindows = route.timeWindowApplied || false;
+
   const first = route.stops[0];
   const last = route.stops[route.stops.length - 1];
-  const middle = route.stops.slice(1, -1);
-
-  const toId = (x) => x.locationId.toString();
-  const calcDist = (seq) => {
-    let d = 0;
-    for (let i = 0; i < seq.length - 1; i++) {
-      const a = seq[i];
-      const b = seq[i + 1];
-      const ai = toId(a);
-      const bi = toId(b);
-      const dist = distances[ai]?.[bi];
-      if (dist !== undefined && dist !== null) {
-        d += dist;
-      } else {
-        d += calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
-      }
-    }
-    return d;
-  };
+  let seq = [first, ...route.stops.slice(1, -1), last];
 
   // 2-opt improvement
   let improved = true;
-  let seq = [first, ...middle, last];
   while (improved) {
     improved = false;
     for (let i = 1; i < seq.length - 2; i++) {
       for (let k = i + 1; k < seq.length - 1; k++) {
         const newSeq = [...seq.slice(0, i), ...seq.slice(i, k + 1).reverse(), ...seq.slice(k + 1)];
-        if (calcDist(newSeq) + 1e-9 < calcDist(seq)) {
-          seq = newSeq;
-          improved = true;
-        }
-      }
-    }
-  }
-
-  // 3-opt limited improvement (simple swap of three segments)
-  const threeOptOnce = () => {
-    for (let i = 1; i < seq.length - 3; i++) {
-      for (let j = i + 1; j < seq.length - 2; j++) {
-        for (let k = j + 1; k < seq.length - 1; k++) {
-          const A = seq.slice(0, i);
-          const B = seq.slice(i, j);
-          const C = seq.slice(j, k);
-          const D = seq.slice(k);
-          const candidates = [
-            [...A, ...B, ...C, ...D], // original
-            [...A, ...B.reverse(), ...C, ...D],
-            [...A, ...B, ...C.reverse(), ...D],
-            [...A, ...C, ...B, ...D],
-            [...A, ...C.reverse(), ...B, ...D],
-            [...A, ...B.reverse(), ...C.reverse(), ...D],
-          ];
-          const base = calcDist(seq);
-          let best = seq;
-          let bestD = base;
-          for (const cand of candidates) {
-            const d = calcDist(cand);
-            if (d + 1e-9 < bestD) {
-              bestD = d;
-              best = cand;
-            }
-          }
-          if (best !== seq) {
-            seq = best;
-            return true;
-          }
-        }
-      }
-    }
-    return false;
-  };
-
-  if (threeOptOnce()) {
-    // run a brief 2-opt again
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (let i = 1; i < seq.length - 2; i++) {
-        for (let k = i + 1; k < seq.length - 1; k++) {
-          const newSeq = [...seq.slice(0, i), ...seq.slice(i, k + 1).reverse(), ...seq.slice(k + 1)];
-          if (calcDist(newSeq) + 1e-9 < calcDist(seq)) {
+        if (calcDist(newSeq, distances) + 1e-9 < calcDist(seq, distances)) {
+          // Check feasibility before accepting
+          if (isSequenceFeasible(newSeq, distances, speedKmh, useTimeWindows)) {
             seq = newSeq;
-            changed = true;
+            improved = true;
           }
         }
       }
     }
   }
 
-  // Rebuild route
   route.stops = seq.map((s, idx) => ({ ...s, order: idx }));
-  // Recompute metrics
-  let totalDistance = 0;
-  for (let i = 0; i < route.stops.length - 1; i++) {
-    const a = route.stops[i];
-    const b = route.stops[i + 1];
-    const ai = toId(a);
-    const bi = toId(b);
-    const dist = distances[ai]?.[bi];
-    if (dist !== undefined && dist !== null) {
-      totalDistance += dist;
-    } else {
-      totalDistance += calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+  route.distance = calcDist(seq, distances);
+};
+
+exports.enhancedLocalSearch = (route, distances, speedKmh) => {
+  if (!route.stops || route.stops.length < 4) return;
+  const useTimeWindows = route.timeWindowApplied || false;
+
+  const first = route.stops[0];
+  const last = route.stops[route.stops.length - 1];
+  let seq = [first, ...route.stops.slice(1, -1), last];
+
+  // 2-opt
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let i = 1; i < seq.length - 2; i++) {
+      for (let k = i + 1; k < seq.length - 1; k++) {
+        const newSeq = [...seq.slice(0, i), ...seq.slice(i, k + 1).reverse(), ...seq.slice(k + 1)];
+        if (calcDist(newSeq, distances) + 1e-9 < calcDist(seq, distances)) {
+          if (isSequenceFeasible(newSeq, distances, speedKmh, useTimeWindows)) {
+            seq = newSeq;
+            improved = true;
+          }
+        }
+      }
     }
   }
-  route.distance = totalDistance;
-  route.duration = Math.round((totalDistance / speedKmh) * 60);
-}
 
-// exports.enhancedLocalSearch = (route, distances, speedKmh) => {
-//     // ... logic from original file
-// };
-exports.enhancedLocalSearch=(route, distances, speedKmh) =>{
- if (!route.stops || route.stops.length < 4) return;
+  // Or-opt
+  for (let length = 1; length <= 3; length++) {
+    for (let i = 1; i < seq.length - length - 1; i++) {
+      const segment = seq.slice(i, i + length);
+      const remaining = [...seq.slice(0, i), ...seq.slice(i + length)];
 
- const toId = (x) => x.locationId.toString();
- const calcDist = (seq) => {
-   let d = 0;
-   for (let i = 0; i < seq.length - 1; i++) {
-     const a = seq[i];
-     const b = seq[i + 1];
-     const ai = toId(a);
-     const bi = toId(b);
-     const dist = distances[ai]?.[bi];
-     if (dist !== undefined && dist !== null) {
-       d += dist;
-     } else {
-       d += calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
-     }
-   }
-   return d;
- };
-
- const first = route.stops[0];
- const last = route.stops[route.stops.length - 1];
- let middle = route.stops.slice(1, -1);
-
- // 2-opt improvement
- let improved = true;
- let seq = [first, ...middle, last];
- while (improved) {
-   improved = false;
-   for (let i = 1; i < seq.length - 2; i++) {
-     for (let k = i + 1; k < seq.length - 1; k++) {
-       const newSeq = [...seq.slice(0, i), ...seq.slice(i, k + 1).reverse(), ...seq.slice(k + 1)];
-       if (calcDist(newSeq) + 1e-9 < calcDist(seq)) {
-         seq = newSeq;
-         improved = true;
-       }
-     }
-   }
- }
-
- // Or-opt: move segments of 1-2-3 consecutive cities
- for (let length = 1; length <= 3; length++) {
-   for (let i = 1; i < seq.length - length - 1; i++) {
-     const segment = seq.slice(i, i + length);
-     const remaining = [...seq.slice(0, i), ...seq.slice(i + length)];
-
-     for (let j = 1; j < remaining.length; j++) {
-       const newSeq = [
-         ...remaining.slice(0, j),
-         ...segment,
-         ...remaining.slice(j)
-       ];
-
-       if (calcDist(newSeq) + 1e-9 < calcDist(seq)) {
-         seq = newSeq;
-       }
-     }
-   }
- }
-
- // Update route
- route.stops = seq.map((s, idx) => ({ ...s, order: idx }));
-
- // Recompute metrics
- let totalDistance = 0;
- for (let i = 0; i < route.stops.length - 1; i++) {
-   const a = route.stops[i];
-   const b = route.stops[i + 1];
-   const ai = toId(a);
-   const bi = toId(b);
-    const dist = distances[ai]?.[bi];
-    if (dist !== undefined && dist !== null) {
-      totalDistance += dist;
-    } else {
-      totalDistance += calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+      for (let j = 1; j < remaining.length; j++) {
+        const newSeq = [...remaining.slice(0, j), ...segment, ...remaining.slice(j)];
+        if (calcDist(newSeq, distances) + 1e-9 < calcDist(seq, distances)) {
+          if (isSequenceFeasible(newSeq, distances, speedKmh, useTimeWindows)) {
+            seq = newSeq;
+          }
+        }
+      }
     }
- }
- route.distance = totalDistance;
- route.duration = Math.round((totalDistance / speedKmh) * 60);
-}
+  }
+
+  route.stops = seq.map((s, idx) => ({ ...s, order: idx }));
+  route.distance = calcDist(seq, distances);
+};

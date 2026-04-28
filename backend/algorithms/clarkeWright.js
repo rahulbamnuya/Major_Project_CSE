@@ -39,6 +39,8 @@ exports.clarkeWrightAlgorithmWithTimeWindows = async (vehicles, locations, depot
   const allNodes = [depot, ...locations];
   const depotId = toId(depot._id);
 
+  console.log(`[DEBUG] Time Window Enforcement is ${useTimeWindows ? 'ON' : 'OFF'}`);
+
   // -----------------------------------------------------------------
   // Build distance matrix (Try OSRM Road Data first, then Haversine)
   // -----------------------------------------------------------------
@@ -57,12 +59,22 @@ exports.clarkeWrightAlgorithmWithTimeWindows = async (vehicles, locations, depot
     longitude: depot.longitude,
     demand: 0,
     order,
-    ...formatTimeWindow(depot.timeWindowStart, depot.timeWindowEnd),
+    ...formatTimeWindow(
+      depot.timeWindowStart || (depot.timeWindow ? depot.timeWindow[0] : null),
+      depot.timeWindowEnd || (depot.timeWindow ? depot.timeWindow[1] : null)
+    ),
   });
 
   let routes = nonDepot.map((loc) => {
+    const twStartRaw = loc.timeWindowStart || (loc.timeWindow ? loc.timeWindow[0] : null);
+    const twEndRaw = loc.timeWindowEnd || (loc.timeWindow ? loc.timeWindow[1] : null);
+
+    if (loc.index === 1 || loc._id.toString().includes('0')) { // Just log for one location to avoid spam
+      console.log(`[DEBUG] Location: ${loc.name} | Raw Window: [${twStartRaw}, ${twEndRaw}]`);
+    }
+
     const locTimeWindow = useTimeWindows
-      ? formatTimeWindow(loc.timeWindowStart, loc.timeWindowEnd)
+      ? formatTimeWindow(twStartRaw, twEndRaw)
       : formatTimeWindow(0, 1440); // Default to all day if not using TW
 
     const serviceTime =
@@ -110,7 +122,26 @@ exports.clarkeWrightAlgorithmWithTimeWindows = async (vehicles, locations, depot
       const id2 = toId(l2._id);
 
       // --- ENHANCED SAVINGS LOGIC (Smarter grouping) ---
-      const basicSaving = distances[depotId][id1] + distances[depotId][id2] - distances[id1][id2];
+      const basicSaving = distances.distances[depotId][id1] + distances.distances[depotId][id2] - distances.distances[id1][id2];
+
+      // Time Penalty: Only apply if enabled. Otherwise, stay pure distance-based.
+      let timePenalty = 1.0;
+      if (useTimeWindows) {
+        const tw1 = formatTimeWindow(
+          l1.timeWindowStart || (l1.timeWindow ? l1.timeWindow[0] : null),
+          l1.timeWindowEnd || (l1.timeWindow ? l1.timeWindow[1] : null)
+        );
+        const tw2 = formatTimeWindow(
+          l2.timeWindowStart || (l2.timeWindow ? l2.timeWindow[0] : null),
+          l2.timeWindowEnd || (l2.timeWindow ? l2.timeWindow[1] : null)
+        );
+        
+        const mid1 = (tw1.startTimeWindowSeconds + tw1.endTimeWindowSeconds) / 2;
+        const mid2 = (tw2.startTimeWindowSeconds + tw2.endTimeWindowSeconds) / 2;
+        const timeDiffHours = Math.abs(mid1 - mid2) / 3600;
+        // AGGRESSIVE PENALTY: If windows are far apart, destroy the saving
+        timePenalty = Math.max(0.1, 1.0 - (timeDiffHours / 10)); 
+      }
 
       // Angular factor: group locations in the same direction
       const angle1 = Math.atan2(l1.latitude - depot.latitude, l1.longitude - depot.longitude);
@@ -124,7 +155,7 @@ exports.clarkeWrightAlgorithmWithTimeWindows = async (vehicles, locations, depot
       const capBonus = combinedDemand <= maxVehicleCap ? 1 : Math.max(0.1, maxVehicleCap / combinedDemand);
 
       // Final enhanced value
-      const sVal = basicSaving * (1 + (1 - angularBonus) * 0.15) * capBonus;
+      const sVal = basicSaving * (1 + (1 - angularBonus) * 0.15) * capBonus * timePenalty;
 
       savings.push({
         i: l1,
@@ -181,16 +212,18 @@ exports.clarkeWrightAlgorithmWithTimeWindows = async (vehicles, locations, depot
     const mergedRoute = {
       stops: combinedStops.map((stop, idx) => ({ ...stop, order: idx })),
       totalCapacity: combinedDemand,
-      totalDistance: rI.totalDistance + rJ.totalDistance + distances[toId(s.i._id)][toId(s.j._id)] - distances[depotId][toId(s.i._id)] - distances[depotId][toId(s.j._id)],
+      totalDistance: rI.totalDistance + rJ.totalDistance + distances.distances[toId(s.i._id)][toId(s.j._id)] - distances.distances[depotId][toId(s.i._id)] - distances.distances[depotId][toId(s.j._id)],
     };
 
     recomputeTimesAndDistance(mergedRoute, distances, useTimeWindows, avgSpeedKmh);
 
-    // Reverted: Allow all merges to maintain high fulfillment. 
-    // Lateness will be shown in the UI but won't block the route creation.
-    if (true || !mergedRoute.isViolated) {
+    // Respect the useTimeWindows flag: 
+    // If enabled, only accept merges that are feasible (no violations).
+    if (!useTimeWindows || !mergedRoute.isViolated) {
       routes = routes.filter(r => r !== rI && r !== rJ);
       routes.push(mergedRoute);
+    } else {
+      console.log(`[DEBUG] Rejecting merge: would violate time window (Violations: ${mergedRoute.timeViolationCount})`);
     }
   }
 
@@ -225,7 +258,7 @@ exports.clarkeWrightAlgorithmWithTimeWindows = async (vehicles, locations, depot
 // =================================================================
 function recomputeTimesAndDistance(route, distances, useTimeWindows, speedKmh) {
   let totalDist = 0;
-  route.isViolated = false; 
+  route.isViolated = false;
   route.timeViolationCount = 0;
   route.timeWindowApplied = useTimeWindows;
 
@@ -237,16 +270,17 @@ function recomputeTimesAndDistance(route, distances, useTimeWindows, speedKmh) {
     const prevStop = route.stops[i - 1];
     const currentStop = route.stops[i];
 
-    const dist = distances[toId(prevStop.locationId)][toId(currentStop.locationId)];
+    const dist = distances.distances[toId(prevStop.locationId)][toId(currentStop.locationId)];
     totalDist += dist;
 
-    const travelTime = computeTravelTime(dist, speedKmh);
+    // Use OSM Duration if available, fallback to manual if not
+    const travelTime = distances.durations[toId(prevStop.locationId)]?.[toId(currentStop.locationId)] ?? computeTravelTime(dist, speedKmh);
     let arrival = prevStop.departureTime + travelTime;
     let waitingTime = 0;
 
     const startTW = currentStop.startTimeWindowSeconds;
     const endTW = currentStop.endTimeWindowSeconds;
-    
+
     // Always provide goalTime for UI even if windows not "applied" for logic
     currentStop.goalTime = endTW;
 

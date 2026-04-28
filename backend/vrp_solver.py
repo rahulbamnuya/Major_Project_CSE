@@ -78,7 +78,7 @@ def solve_cvrp_without_restrictions(
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_idx)
     def demand_callback(from_idx): return demands[manager.IndexToNode(from_idx)]
     demand_callback_idx = routing.RegisterUnaryTransitCallback(demand_callback)
-    routing.AddDimensionWithVehicleCapacity(demand_callback_idx, 0, [v["capacity"] for v in expanded_vehicles], True, "Capacity")
+    routing.AddDimensionWithVehicleCapacity(demand_callback_idx, 0, [int(v["capacity"]) for v in expanded_vehicles], True, "Capacity")
     # --- HETEROGENEOUS FLEET SPEED CALCULATIONS ---
     time_callbacks = []
     
@@ -108,9 +108,9 @@ def solve_cvrp_without_restrictions(
     # Register Time Dimension supporting individual transit times
     routing.AddDimensionWithVehicleTransits(
         time_callbacks,
-        30 * 3600,
-        [24 * 3600] * n_vehicles,
-        False,
+        int(30 * 3600),  # Max slack time (int64_t)
+        int(24 * 3600),  # Max total time (int64_t)
+        False,           # fix_start_cumul_to_zero (bool)
         "Time"
     )
     time_dimension = routing.GetDimensionOrDie("Time")
@@ -385,7 +385,7 @@ def solve_cvrp_with_time_windows(
 
     def demand_callback(from_idx): return demands[manager.IndexToNode(from_idx)]
     demand_callback_idx = routing.RegisterUnaryTransitCallback(demand_callback)
-    routing.AddDimensionWithVehicleCapacity(demand_callback_idx, 0, [v["capacity"] for v in expanded_vehicles], True, "Capacity")
+    routing.AddDimensionWithVehicleCapacity(demand_callback_idx, 0, [int(v["capacity"]) for v in expanded_vehicles], True, "Capacity")
 
     # Global span optimization ensures the solver balances the load across all active vehicles.
     time_dimension.SetGlobalSpanCostCoefficient(100)
