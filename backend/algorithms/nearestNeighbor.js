@@ -1,216 +1,144 @@
 const { calculateDistance, getDistanceMatrix } = require('../utils/optimizationUtils');
 
-// =================================================================
-// CONSTANTS
-// =================================================================
-const BASE_SERVICE_TIME_SECONDS = 3 * 60; // 3 minutes
-const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60; // 10 units per minute
-const DEFAULT_SPEED_KMH = 40;
-const TRAFFIC_FACTOR = 1.25;
-const DEPOT_START_TIME_SECONDS = 6 * 3600; // 6:00 AM
-const DEPOT_END_TIME_SECONDS = 22 * 3600; // 10:00 PM
+const toId = (objId) => objId.toString();
 
-// =================================================================
-// MAIN: Nearest Neighbor Algorithm with Time Windows
-// =================================================================
 exports.nearestNeighborAlgorithm = async (vehicles, locations, depot, options = {}) => {
     const useTimeWindows = options.useTimeWindows || false;
-    const speedKmh = options.avgSpeedKmh || DEFAULT_SPEED_KMH;
+    const speedKmh = options.avgSpeedKmh || 40;
+    const TRAFFIC_FACTOR = options.trafficFactor !== undefined ? options.trafficFactor : 1.25;
+    const DEPOT_START_TIME_SECONDS = options.depotStartTime !== undefined ? options.depotStartTime : 6 * 3600;
+    const DEPOT_END_TIME_SECONDS = options.depotEndTime !== undefined ? options.depotEndTime : 22 * 3600;
+    const BASE_SERVICE_TIME_SECONDS = options.baseServiceTime !== undefined ? options.baseServiceTime : 3 * 60;
+    const UNITS_PER_SECOND_OF_UNLOADING = options.unitsPerSecond !== undefined ? options.unitsPerSecond : 10 / 60;
 
-    console.log(`🚚 Running Nearest Neighbor (Time Windows: ${useTimeWindows}, Speed: ${speedKmh}km/h)...`);
-
-    const toId = (objId) => objId.toString();
     const depotId = toId(depot._id);
-    
-    // Build real distance matrix
     const allLocations = [depot, ...locations];
     const distances = await getDistanceMatrix(allLocations);
 
-    const pending = locations.filter((l) => toId(l._id) !== depotId);
+    let pending = locations.filter((l) => toId(l._id) !== depotId);
+    const used = new Set();
+    const routes = [];
 
-    // Expand vehicles by count
     const vehicleSlots = [];
     vehicles.forEach((v) => {
         const count = v.count || 1;
         for (let i = 0; i < count; i++) {
-            vehicleSlots.push({ 
-                _id: v._id, 
-                name: v.name, 
-                capacity: v.capacity || 0,
-                vehicle_type: v.vehicle_type 
-            });
+            vehicleSlots.push({ ...v, capacity: v.capacityWeight || v.capacity || 1000 });
         }
     });
 
-    const routes = [];
-    const used = new Set();
-
-    const dist = (a, b) => {
-        const idA = toId(a._id || a.locationId);
-        const idB = toId(b._id || b.locationId);
-        return distances.distances[idA]?.[idB] ?? calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
-    };
-
-    // HELPER: Compute travel time in seconds (Uses OSM Duration)
-    const computeTravelTime = (a, b, distanceKm) => {
-        const idA = toId(a._id || a.locationId);
-        const idB = toId(b._id || b.locationId);
-        return distances.durations[idA]?.[idB] ?? (((distanceKm / speedKmh) * 3600) * TRAFFIC_FACTOR);
-    };
-
     for (const vs of vehicleSlots) {
-        let remainingCapacity = vs.capacity;
+        if (used.size >= pending.length) break;
+
+        let currentCapacity = 0;
         let currentLocation = depot;
         let currentTime = DEPOT_START_TIME_SECONDS;
-        const stops = [
-            {
-                locationId: depot._id,
-                locationName: depot.name,
-                latitude: depot.latitude,
-                longitude: depot.longitude,
-                demand: 0,
-                order: 0,
-                arrivalTime: DEPOT_START_TIME_SECONDS,
-                serviceTime: 0,
-                departureTime: DEPOT_START_TIME_SECONDS,
-            },
-        ];
-        let order = 1;
+        const stops = [{
+            locationId: depot._id,
+            locationName: depot.name,
+            latitude: depot.latitude,
+            longitude: depot.longitude,
+            demand: 0,
+            order: 0,
+            arrivalTime: Math.round(currentTime),
+            serviceTime: 0,
+            departureTime: Math.round(currentTime)
+        }];
 
         while (true) {
-            // Find nearest feasible location
             let best = null;
             let bestDistance = Infinity;
 
             for (const loc of pending) {
                 if (used.has(toId(loc._id))) continue;
-                if ((loc.demand || 0) > remainingCapacity) continue;
+
+                const demand = loc.demandWeight || loc.demand || 0;
+                if (currentCapacity + demand > vs.capacity) continue;
 
                 // INFRASTRUCTURE CHECK
-                const rt = (loc.road_type || 'STANDARD').toUpperCase();
-                const vt = (vs.vehicle_type || 'LARGE').toUpperCase();
-                
-                // RULE 1: NARROW -> Only SMALL
-                if (rt === 'NARROW' && vt !== 'SMALL') continue;
-                
-                // RULE 2: STANDARD -> No LARGE
-                if (rt === 'STANDARD' && vt === 'LARGE') continue;
-
-                const travelDistance = dist(currentLocation, loc);
-                const travelTime = computeTravelTime(currentLocation, loc, travelDistance);
-                let arrivalTime = currentTime + travelTime;
-
-                // Time window check (Relaxed to avoid dropping nodes)
-                if (useTimeWindows) {
-                    const startTW = loc.timeWindow ? loc.timeWindow[0] * 60 : 0;
-                    // We don't 'continue' anymore; we just let it be late.
-                    arrivalTime = Math.max(arrivalTime, startTW);
+                if (!options.isSolomonBenchmark) {
+                    const rt = (loc.road_type || 'STANDARD').toUpperCase();
+                    const vt = (vs.vehicle_type || 'LARGE').toUpperCase();
+                    if (rt === 'NARROW' && vt !== 'SMALL') continue;
+                    if (rt === 'STANDARD' && vt === 'LARGE') continue;
                 }
 
-                if (travelDistance < bestDistance) {
-                    bestDistance = travelDistance;
+                const d = distances.distances[toId(currentLocation._id)]?.[toId(loc._id)] ?? 
+                          calculateDistance(currentLocation.latitude, currentLocation.longitude, loc.latitude, loc.longitude);
+                
+                const t = distances.durations[toId(currentLocation._id)]?.[toId(loc._id)] ?? 
+                          (((d / speedKmh) * 3600) * TRAFFIC_FACTOR);
+                
+                const arrival = currentTime + t;
+                const locEndTime = loc.endTimeWindowSeconds || DEPOT_END_TIME_SECONDS;
+
+                // STRICT TIME WINDOW CHECK for the "Fixed" NN
+                if (useTimeWindows && arrival > locEndTime) continue;
+
+                if (d < bestDistance) {
+                    bestDistance = d;
                     best = loc;
                 }
             }
 
             if (!best) break;
 
-            const demand = best.demand || 0;
-            const serviceTime = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
+            const dBest = bestDistance;
+            const tBest = distances.durations[toId(currentLocation._id)]?.[toId(best._id)] ?? 
+                          (((dBest / speedKmh) * 3600) * TRAFFIC_FACTOR);
+            
+            const arrival = currentTime + tBest;
+            const locStartTime = best.startTimeWindowSeconds || 0;
+            const wait = Math.max(0, locStartTime - arrival);
+            
+            const service = (best.serviceTimeSeconds != null) 
+                ? best.serviceTimeSeconds 
+                : BASE_SERVICE_TIME_SECONDS + ((best.demandWeight || best.demand || 0) / UNITS_PER_SECOND_OF_UNLOADING);
 
-            // Arrival / Service / Departure time
-            const travelDistBest = dist(currentLocation, best);
-            const travelTimeBest = computeTravelTime(currentLocation, best, travelDistBest);
-
-            let arrivalTime = currentTime + travelTimeBest;
-            let waitTime = 0;
-            if (useTimeWindows) {
-                const startTW = best.timeWindow ? best.timeWindow[0] * 60 : 0;
-                if (arrivalTime < startTW) {
-                    waitTime = startTW - arrivalTime;
-                    arrivalTime = startTW;
-                }
-            }
-            const departureTime = arrivalTime + serviceTime;
-
+            used.add(toId(best._id));
+            currentCapacity += (best.demandWeight || best.demand || 0);
+            
             stops.push({
                 locationId: best._id,
                 locationName: best.name,
                 latitude: best.latitude,
                 longitude: best.longitude,
-                demand,
-                order: order++,
-                arrivalTime: Math.round(arrivalTime),
-                serviceTime: Math.round(serviceTime),
-                departureTime: Math.round(departureTime),
-                startTimeWindowSeconds: best.timeWindow ? (best.timeWindow[0] * 60) : DEPOT_START_TIME_SECONDS,
-                endTimeWindowSeconds: best.timeWindow ? (best.timeWindow[1] * 60) : DEPOT_END_TIME_SECONDS,
-                timeWindowStart: best.timeWindow ? (best.timeWindow[0] * 60) : DEPOT_START_TIME_SECONDS,
-                timeWindowEnd: best.timeWindow ? (best.timeWindow[1] * 60) : DEPOT_END_TIME_SECONDS,
-                road_type: best.road_type || 'STANDARD',
+                demand: (best.demandWeight || best.demand || 0),
+                order: stops.length,
+                arrivalTime: Math.round(arrival),
+                serviceTime: Math.round(service + wait),
+                departureTime: Math.round(arrival + wait + service)
             });
 
-            remainingCapacity -= demand;
-            currentTime = departureTime;
             currentLocation = best;
-            used.add(toId(best._id));
+            currentTime = arrival + wait + service;
         }
 
-        // Close route back to depot
-        if (stops.length > 1) {
-            const travelDistanceToDepot = dist(currentLocation, depot);
-            const travelTimeToDepot = computeTravelTime(currentLocation, depot, travelDistanceToDepot);
-            const arrivalTimeDepot = currentTime + travelTimeToDepot;
+        // Return to depot
+        const dDepot = distances.distances[toId(currentLocation._id)]?.[depotId] ?? 
+                       calculateDistance(currentLocation.latitude, currentLocation.longitude, depot.latitude, depot.longitude);
+        
+        stops.push({
+            locationId: depot._id,
+            locationName: depot.name,
+            latitude: depot.latitude,
+            longitude: depot.longitude,
+            demand: 0,
+            order: stops.length,
+            arrivalTime: Math.round(currentTime + ((dDepot / speedKmh) * 3600))
+        });
 
-            stops.push({
-                locationId: depot._id,
-                locationName: depot.name,
-                latitude: depot.latitude,
-                longitude: depot.longitude,
-                demand: 0,
-                order: order,
-                arrivalTime: Math.round(arrivalTimeDepot),
-                serviceTime: 0,
-                departureTime: Math.round(arrivalTimeDepot),
-            });
-
-            // Calculate total distance
-            let totalDistance = 0;
-            for (let i = 0; i < stops.length - 1; i++) {
-                totalDistance += dist(stops[i], stops[i + 1]);
-            }
-
-            routes.push({
-                vehicle: vs._id,
-                vehicleName: vs.name,
-                stops,
-                distance: totalDistance,
-                duration: Math.round((arrivalTimeDepot - DEPOT_START_TIME_SECONDS) / 60),
-                totalCapacity: vs.capacity - remainingCapacity,
-                timeWindowApplied: useTimeWindows,
-                timeViolationCount: 0, // Will be computed
-                isViolated: false
-            });
-
-            // Post-process to count violations
-            const lastRoute = routes[routes.length - 1];
-            lastRoute.stops.forEach((s, idx) => {
-                if (useTimeWindows && s.endTimeWindowSeconds && s.arrivalTime > s.endTimeWindowSeconds) {
-                    lastRoute.isViolated = true;
-                    lastRoute.timeViolationCount++;
-                    s.isLate = true;
-                }
-                // Always set goalTime for UI (Default to 10PM if window not specified)
-                s.goalTime = s.endTimeWindowSeconds || DEPOT_END_TIME_SECONDS;
-            });
-            if (arrivalTimeDepot > DEPOT_END_TIME_SECONDS) {
-                lastRoute.isViolated = true;
-                lastRoute.timeViolationCount++;
-                lastRoute.stops[lastRoute.stops.length-1].isLate = true;
-            }
-        }
-
-        if (used.size === pending.length) break;
+        routes.push({
+            vehicle: vs._id,
+            vehicleName: vs.name,
+            stops,
+            distance: stops.reduce((sum, s, i) => {
+                if (i === 0) return 0;
+                const prev = stops[i-1];
+                return sum + (distances.distances[toId(prev.locationId)]?.[toId(s.locationId)] ?? 
+                              calculateDistance(prev.latitude, prev.longitude, s.latitude, s.longitude));
+            }, 0)
+        });
     }
 
     return routes;

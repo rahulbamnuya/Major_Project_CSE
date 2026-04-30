@@ -20,11 +20,11 @@ exports.enhancedClarkeWrightAlgorithm = async (vehicles, locations, depot, optio
   const toId = (objId) => objId.toString();
   const depotId = toId(depot._id);
 
-  const TRAFFIC_FACTOR = 1.25;
-  const DEPOT_START_TIME_SECONDS = 6 * 3600;
-  const DEPOT_END_TIME_SECONDS = 22 * 3600;
-  const BASE_SERVICE_TIME_SECONDS = 3 * 60;
-  const UNITS_PER_SECOND_OF_UNLOADING = 10 / 60;
+  const TRAFFIC_FACTOR = options.trafficFactor !== undefined ? options.trafficFactor : 1.25;
+  const DEPOT_START_TIME_SECONDS = options.depotStartTime !== undefined ? options.depotStartTime : 6 * 3600;
+  const DEPOT_END_TIME_SECONDS = options.depotEndTime !== undefined ? options.depotEndTime : 22 * 3600;
+  const BASE_SERVICE_TIME_SECONDS = options.baseServiceTime !== undefined ? options.baseServiceTime : 3 * 60;
+  const UNITS_PER_SECOND_OF_UNLOADING = options.unitsPerSecond !== undefined ? options.unitsPerSecond : 10 / 60;
 
   // Build distance matrix (include depot)
   const allLocations = [depot, ...locations];
@@ -134,7 +134,7 @@ const routes = nonDepot.map((loc) => {
     }
   }
 
-  const demand = loc.demand || 0;
+  const demand = loc.demandWeight || loc.demand || 0;
   const serviceTime = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
   const departure1 = arrival1 + serviceTime;
   const travelTime2 = distances.durations[toId(loc._id)]?.[depotId] ?? (((distFrom / avgSpeedKmh) * 3600) * TRAFFIC_FACTOR);
@@ -151,7 +151,7 @@ const routes = nonDepot.map((loc) => {
       locationName: loc.name,
       latitude: loc.latitude,
       longitude: loc.longitude,
-      demand: loc.demand || 0,
+      demand: loc.demandWeight || loc.demand || 0,
       order: 1,
       arrivalTime: Math.round(arrival1),
       serviceTime: Math.round(serviceTime + wait),
@@ -212,8 +212,11 @@ const routes = nonDepot.map((loc) => {
 
       // Logic for customer stops (not depot)
       if (k + 1 < rt.stops.length - 1) { // 'to' is not the final depot
-        const demand = to.demand || 0;
-        service = BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
+        const demand = to.demandWeight || to.demand || 0;
+        const locObj = locations.find(l => toId(l._id) === toIdStr);
+        service = (locObj && locObj.serviceTimeSeconds != null) 
+          ? locObj.serviceTimeSeconds 
+          : BASE_SERVICE_TIME_SECONDS + (demand / UNITS_PER_SECOND_OF_UNLOADING);
 
         const twStart = to.startTimeWindowSeconds;
         const twEnd = to.endTimeWindowSeconds;
@@ -307,7 +310,7 @@ const routes = nonDepot.map((loc) => {
     const s1 = getStrictest(r1);
     const s2 = getStrictest(r2);
     const overall = (s1 === 'NARROW' || s2 === 'NARROW') ? 'NARROW' : ((s1 === 'STANDARD' || s2 === 'STANDARD') ? 'STANDARD' : 'WIDE');
-    const allowedMaxCap = maxCap[overall] || 0;
+    const allowedMaxCap = options.isSolomonBenchmark ? Math.max(...vehicles.map(v => v.capacity || 0)) : (maxCap[overall] || 0);
 
     if (combinedDemand > allowedMaxCap) continue;
 
